@@ -1,0 +1,6 @@
+{
+  "name": "PoliCloud",
+  "description": "Intranet escolar para o Instituto Politécnico Pascoal Luvualu do Namibe (IPPLN)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

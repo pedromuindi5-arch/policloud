@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PoliCloud - Nuvem de Ficheiros & Materiais | IPPLN</title>
+  <meta name="description" content="Gestão e partilha de ficheiros pedagógicos, sebentas e apontamentos do Instituto Politécnico Pascoal Luvualu do Namibe." />
+  <link rel="stylesheet" href="./css/style.css" />
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('policloud_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.style.colorScheme = t;
+      } catch(e){}
+    })();
+  </script>
+</head>
+<body>
+  <!-- Overlay de verificação de sessão e perfil -->
+  <div id="session-check-overlay" class="session-check-overlay" aria-live="polite">
+    <div class="spinner spinner-light" style="width: 28px; height: 28px; border-width: 3px;"></div>
+    <span class="session-check-text">A ligar à Cloud Politécnica...</span>
+  </div>
+
+  <div class="app-layout">
+    <!-- Barra Superior Mobile -->
+    <header class="app-topbar">
+      <button type="button" id="hb" class="topbar-menu-btn" aria-label="Abrir menu de navegação">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title">PoliCloud | Nuvem de Ficheiros</span>
+      <button type="button" class="btn-theme-toggle topbar-theme-btn" aria-label="Mudar tema" title="Alternar tema">
+        <span class="theme-toggle-icon"></span>
+      </button>
+    </header>
+
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <!-- Sidebar de Navegação Coerente com o Perfil Conectado -->
+    <aside id="app-sidebar" class="app-sidebar sidebar-light">
+      <div>
+        <a href="/index.html" class="sidebar-brand">
+          <div class="sidebar-logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+          </div>
+          <div class="sidebar-brand-text">
+            <span class="brand-title">PoliCloud</span>
+            <span class="brand-subtitle">Intranet IPPLN</span>
+          </div>
+        </a>
+
+        <!-- Itens de Navegação com indicação visual da página activa -->
+        <nav class="sidebar-nav" aria-label="Navegação da intranet">
+          <a href="/dashboard-aluno.html" id="nav-dashboard-link" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="7" height="9" x="3" y="3" rx="1"/>
+              <rect width="7" height="5" x="14" y="3" rx="1"/>
+              <rect width="7" height="9" x="14" y="12" rx="1"/>
+              <rect width="7" height="5" x="3" y="16" rx="1"/>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+
+          <a href="/noticias.html" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
+              <path d="M18 14h-8"/>
+              <path d="M15 18h-5"/>
+              <path d="M10 6h8v4h-8V6Z"/>
+            </svg>
+            <span>Notícias</span>
+          </a>
+
+          <a href="/mural.html" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span>Mural & Calendário</span>
+          </a>
+
+          <a href="/cloud.html" class="nav-item active" aria-current="page">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <span>Cloud (Ficheiros)</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Rodapé da Sidebar: Info do Utilizador e Terminar Sessão -->
+      <footer class="sidebar-footer">
+        <div class="sidebar-theme-row">
+          <button type="button" class="btn-theme-toggle sidebar-theme-btn" aria-label="Mudar tema" title="Alternar tema">
+            <span class="theme-toggle-icon"></span>
+            <span class="theme-toggle-label">Alternar Tema</span>
+          </button>
+        </div>
+
+        <div id="demo-role-switcher" class="demo-role-switcher" style="display: none;"></div>
+
+        <div class="sidebar-user-mini">
+          <div id="sidebar-user-avatar" class="user-avatar">U</div>
+          <div class="user-meta">
+            <span id="sidebar-user-name" class="user-name-label">Utilizador</span>
+            <span id="sidebar-user-role" class="user-role-badge">Perfil: Carregando...</span>
+          </div>
+        </div>
+
+        <button type="button" id="logout-btn" class="btn-logout" aria-label="Terminar sessão">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          <span>Terminar Sessão</span>
+        </button>
+      </footer>
+    </aside>
+
+    <!-- Conteúdo Principal da Cloud -->
+    <main class="app-main">
+      <div class="content-container">
+
+        <!-- Cabeçalho da Nuvem de Ficheiros -->
+        <header class="cloud-header-card">
+          <div class="cloud-header-info">
+            <span class="cloud-header-tag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+              </svg>
+              IPPLN • Repositório Digital Académico
+            </span>
+            <h1 class="cloud-header-title">Nuvem de Ficheiros & Materiais</h1>
+            <p class="cloud-header-desc">
+              Aceda a guiões de trabalhos práticos, sebentas, enunciados e recursos pedagógicos organizados por curso, classe, turma e disciplina.
+            </p>
+          </div>
+
+          <!-- Botão de Upload de Ficheiro -->
+          <div>
+            <button type="button" id="btn-open-upload" class="btn-cloud-upload" aria-haspopup="dialog">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span>Carregar Ficheiro</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Barra de Filtros e Pesquisa Académica (Glassmorphism) -->
+        <section class="cloud-filters-panel" aria-label="Filtros de ficheiros">
+          <div class="cloud-filters-row">
+            <!-- 1. Curso -->
+            <div class="cloud-filter-item" id="filter-curso-wrap">
+              <label for="filter-curso" class="cloud-filter-label">Curso</label>
+              <select id="filter-curso" class="cloud-select">
+                <option value="todos">Todos os Cursos</option>
+                <option value="Informática">Informática</option>
+                <option value="Electricidade">Electricidade</option>
+                <option value="Mecânica">Mecânica</option>
+                <option value="Química">Química</option>
+              </select>
+            </div>
+
+            <!-- 2. Classe -->
+            <div class="cloud-filter-item">
+              <label for="filter-classe" class="cloud-filter-label">Classe</label>
+              <select id="filter-classe" class="cloud-select">
+                <option value="todas">Todas as Classes</option>
+                <option value="10ª">10ª Classe</option>
+                <option value="11ª">11ª Classe</option>
+                <option value="12ª">12ª Classe</option>
+                <option value="13ª">13ª Classe</option>
+              </select>
+            </div>
+
+            <!-- 3. Turma -->
+            <div class="cloud-filter-item" id="filter-turma-wrap">
+              <label for="filter-turma" class="cloud-filter-label">Turma</label>
+              <select id="filter-turma" class="cloud-select">
+                <option value="todas">Todas as Turmas</option>
+                <option value="INF-10A">Turma INF-10A</option>
+                <option value="INF-11A">Turma INF-11A</option>
+                <option value="INF-12A">Turma INF-12A</option>
+                <option value="ELE-10A">Turma ELE-10A</option>
+                <option value="ELE-11A">Turma ELE-11A</option>
+                <option value="MEC-12A">Turma MEC-12A</option>
+                <option value="QUI-10A">Turma QUI-10A</option>
+              </select>
+            </div>
+
+            <!-- 4. Disciplina -->
+            <div class="cloud-filter-item">
+              <label for="filter-disciplina" class="cloud-filter-label">Disciplina</label>
+              <select id="filter-disciplina" class="cloud-select">
+                <option value="todas">Todas as Disciplinas</option>
+                <option value="Redes de Computadores">Redes de Computadores</option>
+                <option value="Sistemas Digitais">Sistemas Digitais</option>
+                <option value="Programação Web">Programação Web</option>
+                <option value="Máquinas Eléctricas">Máquinas Eléctricas</option>
+                <option value="Circuitos Electrónicos">Circuitos Electrónicos</option>
+                <option value="Tecnologia dos Materiais">Tecnologia dos Materiais</option>
+                <option value="Matemática">Matemática</option>
+                <option value="Física">Física</option>
+                <option value="Língua Portuguesa">Língua Portuguesa</option>
+              </select>
+            </div>
+
+            <!-- 5. Pesquisa por Nome -->
+            <div class="cloud-search-wrapper">
+              <span class="cloud-search-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input
+                type="search"
+                id="filter-search"
+                class="cloud-search-input"
+                placeholder="Pesquisar por nome de ficheiro..."
+                aria-label="Pesquisar ficheiro por nome"
+              />
+            </div>
+          </div>
+
+          <!-- Metadados de Filtro Activo -->
+          <div class="cloud-filters-meta-row">
+            <span class="cloud-active-filter-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span id="active-filter-text">A mostrar todos os ficheiros disponíveis</span>
+            </span>
+
+            <button type="button" id="btn-reset-filters" class="btn-reset-filters">
+              Repor Filtros
+            </button>
+          </div>
+        </section>
+
+        <!-- Lista de Ficheiros -->
+        <section aria-label="Repositório de Ficheiros">
+          <div class="news-section-title-wrap">
+            <h2 class="news-section-title" style="color: var(--light-text);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+              </svg>
+              Documentos & Recursos
+            </h2>
+            <span id="total-files-count" class="news-date-text">A carregar...</span>
+          </div>
+
+          <div id="cloud-files-container" class="cloud-files-container" aria-live="polite">
+            <div class="state-loading">
+              <div class="spinner spinner-light"></div>
+              <span>A consultar o repositório da nuvem...</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MODAL: CARREGAR FICHEIRO / UPLOAD (SUPABASE STORAGE)     -->
+  <!-- ========================================================= -->
+  <div id="upload-file-modal" class="admin-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-upload-title">
+    <div class="admin-modal-card">
+      <header class="admin-modal-header">
+        <div class="admin-modal-title-group">
+          <div class="admin-modal-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h2 id="modal-upload-title" class="admin-modal-title">Carregar Ficheiro para a Cloud</h2>
+            <span class="admin-modal-sub">Armazenamento no bucket seguro "policloud" com versionamento automático</span>
+          </div>
+        </div>
+        <button type="button" id="btn-close-upload-modal" class="modal-close-btn" aria-label="Fechar janela">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </header>
+
+      <form id="upload-file-form">
+        <div class="admin-modal-body">
+          <div id="upload-form-alert" class="alert-box"></div>
+
+          <!-- Zona de Drag & Drop de Ficheiro -->
+          <div class="form-group-custom">
+            <label class="form-label-custom">
+              Ficheiro a Carregar <span class="label-required">*</span>
+            </label>
+            <div id="file-dropzone" class="news-upload-dropzone">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--light-accent); margin-bottom: 8px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span class="dropzone-title">Arraste o ficheiro ou clique para selecionar</span>
+              <span class="dropzone-desc">Formatos permitidos: PDF, DOCX, DOC, PNG, JPG, JPEG, WEBP</span>
+              <span class="dropzone-meta">Tamanho máximo: 15 MB</span>
+              <input
+                type="file"
+                id="file-input"
+                name="file"
+                class="hidden-file-input"
+                accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,image/png,image/jpeg,image/webp"
+              />
+            </div>
+
+            <!-- Prévia do Ficheiro Selecionado -->
+            <div id="file-preview-card" class="image-preview-card" style="display: none; margin-top: 10px;">
+              <div class="image-preview-info" style="display: flex; align-items: center; gap: 12px;">
+                <div class="cloud-file-icon file-icon-pdf" id="preview-file-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                  </svg>
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                  <span id="preview-file-name" class="image-preview-title">ficheiro.pdf</span>
+                  <span id="preview-file-size" class="image-preview-meta">0 KB</span>
+                </div>
+              </div>
+              <button type="button" id="btn-remove-selected-file" class="btn-remove-preview" aria-label="Remover ficheiro selecionado">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Barra de Progresso de Upload -->
+          <div id="upload-progress-box" class="upload-progress-box" style="display: none;">
+            <div class="upload-progress-info">
+              <span id="upload-progress-text">A carregar ficheiro...</span>
+              <span id="upload-progress-percent">0%</span>
+            </div>
+            <div class="upload-progress-track">
+              <div id="upload-progress-bar" class="upload-progress-bar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Disciplina -->
+          <div class="form-group-custom">
+            <label for="upload-disciplina" class="form-label-custom">
+              Disciplina <span class="label-required">*</span>
+            </label>
+            <select id="upload-disciplina" name="disciplina" class="form-input-custom" required>
+              <option value="">Selecione a disciplina...</option>
+              <option value="Redes de Computadores">Redes de Computadores</option>
+              <option value="Sistemas Digitais">Sistemas Digitais</option>
+              <option value="Programação Web">Programação Web</option>
+              <option value="Máquinas Eléctricas">Máquinas Eléctricas</option>
+              <option value="Circuitos Electrónicos">Circuitos Electrónicos</option>
+              <option value="Tecnologia dos Materiais">Tecnologia dos Materiais</option>
+              <option value="Matemática">Matemática</option>
+              <option value="Física">Física</option>
+              <option value="Língua Portuguesa">Língua Portuguesa</option>
+              <option value="Geral">Documentação Geral</option>
+            </select>
+          </div>
+
+          <!-- Contexto Académico (Curso, Classe, Turma) -->
+          <div class="form-row-2col">
+            <!-- Curso -->
+            <div class="form-group-custom" id="upload-curso-group">
+              <label for="upload-curso" class="form-label-custom">
+                Curso <span class="label-required">*</span>
+              </label>
+              <select id="upload-curso" name="curso" class="form-input-custom" required>
+                <option value="Informática">Informática</option>
+                <option value="Electricidade">Electricidade</option>
+                <option value="Mecânica">Mecânica</option>
+                <option value="Química">Química</option>
+                <option value="Geral">Tronco Comum (Todos)</option>
+              </select>
+            </div>
+
+            <!-- Classe -->
+            <div class="form-group-custom">
+              <label for="upload-classe" class="form-label-custom">Classe</label>
+              <select id="upload-classe" name="classe" class="form-input-custom">
+                <option value="12ª">12ª Classe</option>
+                <option value="11ª">11ª Classe</option>
+                <option value="10ª">10ª Classe</option>
+                <option value="13ª">13ª Classe</option>
+                <option value="Geral">Todas as Classes</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Turma Destinatária -->
+          <div class="form-group-custom" id="upload-turma-group">
+            <label for="upload-turma" class="form-label-custom">
+              Turma de Destino <span class="label-required">*</span>
+            </label>
+            <select id="upload-turma" name="turma" class="form-input-custom" required>
+              <option value="INF-12A">Turma INF-12A</option>
+              <option value="INF-11A">Turma INF-11A</option>
+              <option value="INF-10A">Turma INF-10A</option>
+              <option value="ELE-11A">Turma ELE-11A</option>
+              <option value="ELE-10A">Turma ELE-10A</option>
+              <option value="MEC-12A">Turma MEC-12A</option>
+              <option value="QUI-10A">Turma QUI-10A</option>
+              <option value="todas">Geral (Todo o Curso)</option>
+            </select>
+          </div>
+
+          <!-- Indicador Informativo Estrito para Aluno -->
+          <div id="student-upload-note" style="display: none; padding: 10px 14px; background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.2); border-radius: 8px; font-size: 12.5px; color: var(--light-accent); margin-top: 4px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <strong>Regra de Perfil Aluno:</strong> O seu envio será registado exclusivamente na sua própria turma (<span id="student-target-class-label">...</span>).
+          </div>
+        </div>
+
+        <footer class="admin-modal-footer">
+          <button type="button" id="btn-cancel-upload" class="btn-modal-cancel">Cancelar</button>
+          <button type="submit" id="btn-submit-upload" class="btn-modal-submit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Submeter Ficheiro</span>
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- Script Lógico da Cloud de Ficheiros -->
+  <script type="module" src="./js/cloud.js"></script>
+</body>
+</html>
