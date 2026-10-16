@@ -6339,11 +6339,33 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Evitar overflow horizontal acidental no body e contentores flex/grid */
+/* Evitar overflow horizontal acidental sem quebrar position: sticky/fixed */
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Em Desktop (> 1024px), a barra lateral esquerda fica 100% FIXA no ecrã */
+@media (min-width: 1025px) {
+  .app-sidebar,
+  .sidebar-light,
+  .sidebar-dark {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 280px !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow-y: auto !important;
+    z-index: 100 !important;
+  }
+
+  .app-main {
+    margin-left: 280px !important;
+    width: calc(100% - 280px) !important;
+  }
 }
 
 .app-main,
