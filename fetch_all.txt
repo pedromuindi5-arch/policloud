@@ -1,0 +1,29 @@
+async function fetchAllFiles() {
+  try {
+    let query = sb
+      .from('files')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // Regra estrita para Aluno: só vê e descarrega ficheiros do seu próprio curso/turma — NUNCA de outro curso!
+    if (currentProfile.role === 'aluno') {
+      const studentCurso = currentProfile.curso || 'Informática';
+      // Filtra por arquivos do curso do aluno ou gerais da escola
+      query = query.or(`curso.eq.${studentCurso},curso.eq.Geral,curso.is.null`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    allFilesData = data || [];
+  } catch (err) {
+    console.error('Erro ao consultar ficheiros:', err);
+    allFilesData = getLocalDemoFiles();
+  }
+}
+
+/**
+ * Agrupa ficheiros por nome e contexto (para identificar versões históricas v1, v2, v3)
+ */
+/**
+ * Agrupa ficheiros por nome e contexto (para identificar versões históricas v1, v2, v3)
+ */

@@ -19,6 +19,7 @@ export default defineConfig(() => {
           mural: path.resolve(__dirname, 'mural.html'),
           dashboardAluno: path.resolve(__dirname, 'dashboard-aluno.html'),
           dashboardProfessor: path.resolve(__dirname, 'dashboard-professor.html'),
+          mensagens: path.resolve(__dirname, 'mensagens.html'),
         },
       },
     },

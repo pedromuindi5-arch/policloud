@@ -1,8 +1,8 @@
-// PoliCloud - Intranet Escolar IPPLN
-// Lógica da Nuvem de Ficheiros & Materiais Pedagógicos (cloud.html)
-
-import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { sb, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, DISCIPLINAS, getDisciplinasDB } from './sb.js';
+import { turmaHasNewActivity } from './messages-service.js';
 import './theme.js';
+
+let dynamicDisciplinas = [];
 
 function isConfigPlaceholder() { return false; }
 
@@ -18,7 +18,17 @@ const sidebarUserAvatar = document.getElementById('sidebar-user-avatar');
 const sidebarUserRole = document.getElementById('sidebar-user-role');
 const demoRoleSwitcher = document.getElementById('demo-role-switcher');
 
-// Filtros
+// Navegação de Pastas & Breadcrumbs
+const cloudBreadcrumbs = document.getElementById('cloud-breadcrumbs');
+const btnCrumbRoot = document.getElementById('btn-crumb-root');
+const cloudCurrentPathLabel = document.getElementById('cloud-current-path-label');
+const cloudFoldersSection = document.getElementById('cloud-folders-section');
+const foldersSectionTitle = document.getElementById('folders-section-title');
+const foldersCountText = document.getElementById('folders-count-text');
+const cloudFoldersGrid = document.getElementById('cloud-folders-grid');
+const filesSectionTitle = document.getElementById('files-section-title');
+
+// Filtros e Ordenação
 const filterCurso = document.getElementById('filter-curso');
 const filterCursoWrap = document.getElementById('filter-curso-wrap');
 const filterClasse = document.getElementById('filter-classe');
@@ -26,6 +36,7 @@ const filterTurma = document.getElementById('filter-turma');
 const filterTurmaWrap = document.getElementById('filter-turma-wrap');
 const filterDisciplina = document.getElementById('filter-disciplina');
 const filterSearch = document.getElementById('filter-search');
+const filterSort = document.getElementById('filter-sort');
 const activeFilterText = document.getElementById('active-filter-text');
 const btnResetFilters = document.getElementById('btn-reset-filters');
 const totalFilesCount = document.getElementById('total-files-count');
@@ -82,6 +93,14 @@ let currentUser = null;
 let selectedUploadFile = null;
 let allFilesData = [];
 
+// Estado de Navegação por Pastas
+let currentFolderState = {
+  level: 'root', // 'root' (ver disciplinas ou classes), 'turma' (se professor escolheu classe), 'disciplina'
+  classe: null,
+  turma: null,
+  disciplina: null
+};
+
 // ==========================================
 // Dados de Demonstração (com Histórico de Versões)
 // ==========================================
@@ -90,14 +109,14 @@ const DEFAULT_DEMO_FILES = [
   {
     id: 'demo-f-1a',
     name: 'Guiao_Laboratorio_VLANs_Roteamento.pdf',
-    storage_path: 'materiais/INF-12A/Guiao_Laboratorio_VLANs_Roteamento_v1.pdf',
-    file_url: 'materiais/INF-12A/Guiao_Laboratorio_VLANs_Roteamento_v1.pdf',
+    storage_path: 'materiais/A/Guiao_Laboratorio_VLANs_Roteamento_v1.pdf',
+    file_url: 'materiais/A/Guiao_Laboratorio_VLANs_Roteamento_v1.pdf',
     size: 1845000,
     mime_type: 'application/pdf',
     disciplina: 'Redes de Computadores',
     curso: 'Informática',
     classe: '12ª',
-    turma: 'INF-12A',
+    turma: 'A',
     version: 1,
     uploader_name: 'Prof. Manuel Gonçalves',
     uploader_role: 'professor',
@@ -106,14 +125,14 @@ const DEFAULT_DEMO_FILES = [
   {
     id: 'demo-f-1b',
     name: 'Guiao_Laboratorio_VLANs_Roteamento.pdf',
-    storage_path: 'materiais/INF-12A/Guiao_Laboratorio_VLANs_Roteamento_v2.pdf',
-    file_url: 'materiais/INF-12A/Guiao_Laboratorio_VLANs_Roteamento_v2.pdf',
+    storage_path: 'materiais/A/Guiao_Laboratorio_VLANs_Roteamento_v2.pdf',
+    file_url: 'materiais/A/Guiao_Laboratorio_VLANs_Roteamento_v2.pdf',
     size: 2150000,
     mime_type: 'application/pdf',
     disciplina: 'Redes de Computadores',
     curso: 'Informática',
     classe: '12ª',
-    turma: 'INF-12A',
+    turma: 'A',
     version: 2,
     uploader_name: 'Prof. Manuel Gonçalves',
     uploader_role: 'professor',
@@ -123,14 +142,14 @@ const DEFAULT_DEMO_FILES = [
   {
     id: 'demo-f-2',
     name: 'Sebenta_Arquitectura_Microcontroladores.docx',
-    storage_path: 'materiais/INF-12A/Sebenta_Arquitectura_Microcontroladores_v1.docx',
-    file_url: 'materiais/INF-12A/Sebenta_Arquitectura_Microcontroladores_v1.docx',
+    storage_path: 'materiais/A/Sebenta_Arquitectura_Microcontroladores_v1.docx',
+    file_url: 'materiais/A/Sebenta_Arquitectura_Microcontroladores_v1.docx',
     size: 3420000,
     mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     disciplina: 'Sistemas Digitais',
     curso: 'Informática',
     classe: '12ª',
-    turma: 'INF-12A',
+    turma: 'A',
     version: 1,
     uploader_name: 'Prof. Maria Esperança',
     uploader_role: 'professor',
@@ -140,14 +159,14 @@ const DEFAULT_DEMO_FILES = [
   {
     id: 'demo-f-3',
     name: 'Relatorio_Configuracao_Servidor_DNS.pdf',
-    storage_path: 'materiais/INF-12A/Relatorio_Configuracao_Servidor_DNS_v1.pdf',
-    file_url: 'materiais/INF-12A/Relatorio_Configuracao_Servidor_DNS_v1.pdf',
+    storage_path: 'materiais/A/Relatorio_Configuracao_Servidor_DNS_v1.pdf',
+    file_url: 'materiais/A/Relatorio_Configuracao_Servidor_DNS_v1.pdf',
     size: 950000,
     mime_type: 'application/pdf',
     disciplina: 'Redes de Computadores',
     curso: 'Informática',
     classe: '12ª',
-    turma: 'INF-12A',
+    turma: 'A',
     version: 1,
     uploader_name: 'Pedro Muindi (Aluno)',
     uploader_role: 'aluno',
@@ -157,14 +176,14 @@ const DEFAULT_DEMO_FILES = [
   {
     id: 'demo-f-4',
     name: 'Esquema_Unifilar_Subestacao_Namibe.png',
-    storage_path: 'materiais/ELE-11A/Esquema_Unifilar_Subestacao_Namibe_v1.png',
-    file_url: 'materiais/ELE-11A/Esquema_Unifilar_Subestacao_Namibe_v1.png',
+    storage_path: 'materiais/B/Esquema_Unifilar_Subestacao_Namibe_v1.png',
+    file_url: 'materiais/B/Esquema_Unifilar_Subestacao_Namibe_v1.png',
     size: 4200000,
     mime_type: 'image/png',
     disciplina: 'Máquinas Eléctricas',
     curso: 'Electricidade',
     classe: '11ª',
-    turma: 'ELE-11A',
+    turma: 'B',
     version: 1,
     uploader_name: 'Prof. António Silva',
     uploader_role: 'professor',
@@ -297,6 +316,7 @@ function setupDemoRoleSwitcher(activeRole) {
   if (!isConfigPlaceholder()) {
     demoRoleSwitcher.style.display = 'none';
     return;
+
   }
 
   demoRoleSwitcher.style.display = 'flex';
@@ -347,6 +367,9 @@ async function fetchAllFiles() {
 /**
  * Agrupa ficheiros por nome e contexto (para identificar versões históricas v1, v2, v3)
  */
+/**
+ * Agrupa ficheiros por nome e contexto (para identificar versões históricas v1, v2, v3)
+ */
 function groupFilesByVersion(files) {
   const groups = new Map();
 
@@ -377,6 +400,506 @@ function groupFilesByVersion(files) {
 }
 
 /**
+ * Gestão de Notificações / Badges "Novo" das Pastas
+ */
+function getSeenFolders() {
+  try {
+    const s = localStorage.getItem('policloud_seen_folders');
+    return s ? JSON.parse(s) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function markFolderAsSeen(folderKey) {
+  try {
+    const seen = getSeenFolders();
+    if (!seen.includes(folderKey)) {
+      seen.push(folderKey);
+      localStorage.setItem('policloud_seen_folders', JSON.stringify(seen));
+    }
+  } catch (e) {}
+}
+
+function isFolderSeen(folderKey) {
+  return getSeenFolders().includes(folderKey);
+}
+
+/**
+ * Normaliza e compara nomes de cursos ignorando maiúsculas e acentos
+ */
+export function matchesCourseName(c1, c2) {
+  if (!c1 || !c2) return false;
+  const s1 = c1.toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const s2 = c2.toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (s1 === s2) return true;
+  if ((s1 === 'electronica' || s1 === 'electricidade') && (s2 === 'electronica' || s2 === 'electricidade')) return true;
+  return false;
+}
+
+/**
+ * Retorna lista filtrada e desduplicada de disciplinas para um determinado curso e classe
+ */
+export function getDisciplinasForContext({ course = null, classe = null } = {}) {
+  const norm = s => (s || '').toString().toLowerCase().trim();
+  const clNorm = classe && classe !== 'todas' ? norm(classe) : null;
+
+  const source = (dynamicDisciplinas && dynamicDisciplinas.length > 0)
+    ? dynamicDisciplinas
+    : DISCIPLINAS.map(d => ({ nome: d, curso: 'Geral', classe: 'Todas' }));
+
+  const filtered = source.filter(d => {
+    const dNome = typeof d === 'string' ? d : d.nome;
+    if (!dNome) return false;
+
+    if (typeof d === 'object') {
+      const dCursoNorm = norm(d.curso);
+      const isGeneral = !d.curso || dCursoNorm === 'geral' || dCursoNorm === 'todos' || dCursoNorm === 'tronco comum';
+
+      if (course && course !== 'todos') {
+        const matches = isGeneral || matchesCourseName(d.curso, course);
+        if (!matches) return false;
+      }
+
+      if (clNorm && d.classe) {
+        const dClasseNorm = norm(d.classe);
+        const matchesClasse = dClasseNorm === clNorm || dClasseNorm === 'todas' || dClasseNorm === 'geral';
+        if (!matchesClasse) return false;
+      }
+    }
+
+    return true;
+  });
+
+  const uniqueNames = [];
+  const seen = new Set();
+  filtered.forEach(d => {
+    const name = typeof d === 'string' ? d.trim() : (d.nome || '').trim();
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      uniqueNames.push(name);
+    }
+  });
+
+  return uniqueNames.sort((a, b) => a.localeCompare(b, 'pt'));
+}
+
+/**
+ * Renderiza o Sistema de Pastas (UI/UX Inspirado em Kintsugi e Synapse)
+ */
+function renderFolderSystem(files) {
+  if (!cloudFoldersGrid) return;
+
+  const isTeacher = currentProfile && (currentProfile.role === 'professor' || currentProfile.role === 'teacher');
+  const isAdmin = currentProfile && currentProfile.role === 'admin';
+
+  // 1. Atualizar Breadcrumbs
+  updateBreadcrumbsUI();
+
+  const cloudMainHeader = document.getElementById('cloud-main-header');
+  const cloudFiltersPanel = document.getElementById('cloud-filters-panel');
+  const foldersTitleWrap = document.getElementById('folders-section-title-wrap');
+
+  // CASO ESPECIAL: Utilizador ESTÁ DENTRO DE UMA PASTA DE DISCIPLINA (Foco Exclusivo)
+  if (currentFolderState.disciplina) {
+    // Oculta o cabeçalho superior redundante e a barra de filtros
+    if (cloudMainHeader) cloudMainHeader.style.display = 'none';
+    if (cloudFiltersPanel) cloudFiltersPanel.style.display = 'none';
+    if (foldersTitleWrap) foldersTitleWrap.style.display = 'none';
+
+    const disc = currentFolderState.disciplina;
+    const discFiles = files.filter(f => f.disciplina === disc);
+    const totalSize = discFiles.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+
+    const contextParts = [];
+    if (currentFolderState.classe) contextParts.push(`${currentFolderState.classe} Classe`);
+    if (currentFolderState.turma) contextParts.push(`Turma ${currentFolderState.turma}`);
+    if (currentProfile?.curso && currentProfile.role === 'aluno') contextParts.push(currentProfile.curso);
+    const contextLabel = contextParts.join(' • ') || 'Geral IPPLN';
+
+    cloudFoldersGrid.innerHTML = `
+      <div class="cloud-active-folder-banner" style="grid-column: 1 / -1;">
+        <div class="cloud-active-folder-left">
+          <div class="cloud-folder-icon-wrap" style="width: 58px; height: 58px; background: linear-gradient(135deg, rgba(37,99,235,0.18) 0%, rgba(96,165,250,0.28) 100%); color: var(--color-accent);">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+            </svg>
+          </div>
+          <div class="cloud-active-folder-info">
+            <div class="cloud-active-folder-badge">Pasta em Foco</div>
+            <h2 class="cloud-active-folder-title">${escapeHtml(disc)}</h2>
+            <div class="cloud-active-folder-meta">
+              <span><strong>${discFiles.length}</strong> ${discFiles.length === 1 ? 'ficheiro' : 'ficheiros'}</span>
+              <span> • ${formatFileSize(totalSize)}</span>
+              <span> • ${escapeHtml(contextLabel)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="cloud-active-folder-actions">
+          <button type="button" class="btn-folder-back" id="btn-back-folders">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            <span>Voltar às Pastas</span>
+          </button>
+          <button type="button" class="btn-folder-upload" id="btn-folder-upload">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Carregar para esta Pasta</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const btnBack = document.getElementById('btn-back-folders');
+    if (btnBack) {
+      btnBack.addEventListener('click', () => {
+        currentFolderState.disciplina = null;
+        if (filterDisciplina) filterDisciplina.value = 'todas';
+        renderFilteredFiles();
+      });
+    }
+
+    const btnUpload = document.getElementById('btn-folder-upload');
+    if (btnUpload) {
+      btnUpload.addEventListener('click', () => {
+        openUploadModal();
+      });
+    }
+
+    return;
+  }
+
+  // Quando na visão geral (todas as pastas), reexibe o cabeçalho, filtros e títulos
+  if (cloudMainHeader) cloudMainHeader.style.display = '';
+  if (cloudFiltersPanel) cloudFiltersPanel.style.display = '';
+  if (foldersTitleWrap) foldersTitleWrap.style.display = '';
+
+  // Caso 1: Nível Raiz para Professor ou Admin (Exibir Classes)
+  if ((isTeacher || isAdmin) && currentFolderState.level === 'root') {
+    if (foldersSectionTitle) {
+      foldersSectionTitle.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+        </svg>
+        <span>Classes Académicas</span>
+      `;
+    }
+
+    const availableClasses = (isTeacher && currentProfile.classes && currentProfile.classes.length > 0)
+      ? currentProfile.classes
+      : CLASSES;
+
+    if (foldersCountText) {
+      foldersCountText.textContent = `${availableClasses.length} ${availableClasses.length === 1 ? 'classe' : 'classes'}`;
+    }
+
+    cloudFoldersGrid.innerHTML = availableClasses.map(classe => {
+      const classFiles = files.filter(f => f.classe === classe || (!f.classe && classe === '12ª'));
+      const totalSize = classFiles.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+      const hasRecent = classFiles.some(f => (Date.now() - new Date(f.created_at).getTime()) < 48 * 3600 * 1000);
+      const folderKey = `classe:${classe}`;
+      const showNewBadge = hasRecent && !isFolderSeen(folderKey);
+
+      return `
+        <div class="cloud-folder-card" data-folder-action="enter-classe" data-folder-target="${escapeHtml(classe)}">
+          ${showNewBadge ? `<span class="cloud-folder-badge-new">Novo</span>` : ''}
+          <div class="cloud-folder-top">
+            <div class="cloud-folder-icon-wrap">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.5 21a3 3 0 0 0 3-3v-4.5a3 3 0 0 0-3-3h-1.5V6.75A2.75 2.75 0 0 0 15.25 4H8.75A2.75 2.75 0 0 0 6 6.75V10.5H4.5A3 3 0 0 0 1.5 13.5V18a3 3 0 0 0 3 3h15Z" opacity="0.4"/>
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h3 class="cloud-folder-title">${escapeHtml(classe)} Classe</h3>
+            <span class="cloud-folder-subtext">Turmas e disciplinas correspondentes</span>
+          </div>
+          <div class="cloud-folder-meta">
+            <span class="cloud-folder-count">${classFiles.length} ${classFiles.length === 1 ? 'ficheiro' : 'ficheiros'}</span>
+            <span>${formatFileSize(totalSize)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    attachFolderClickEvents();
+    return;
+  }
+
+  // Caso 2: Professor ou Admin dentro de uma Classe (Exibir Turmas)
+  if ((isTeacher || isAdmin) && currentFolderState.level === 'turma') {
+    if (foldersSectionTitle) {
+      foldersSectionTitle.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+        </svg>
+        <span>Turmas da ${escapeHtml(currentFolderState.classe)} Classe</span>
+      `;
+    }
+
+    const availableTurmas = (isTeacher && currentProfile.turmas && currentProfile.turmas.length > 0)
+      ? currentProfile.turmas
+      : TURMAS;
+
+    if (foldersCountText) {
+      foldersCountText.textContent = `${availableTurmas.length} ${availableTurmas.length === 1 ? 'turma' : 'turmas'}`;
+    }
+
+    cloudFoldersGrid.innerHTML = availableTurmas.map(turma => {
+      const turmaFiles = files.filter(f => (f.turma === turma || f.turma === `INF-${currentFolderState.classe.replace('ª','')}${turma}`) && (f.classe === currentFolderState.classe || !f.classe));
+      const totalSize = turmaFiles.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+      const hasRecent = turmaFiles.some(f => (Date.now() - new Date(f.created_at).getTime()) < 48 * 3600 * 1000) || turmaHasNewActivity(turma);
+      const folderKey = `turma:${turma}`;
+      const showNewBadge = hasRecent && !isFolderSeen(folderKey);
+
+      return `
+        <div class="cloud-folder-card" data-folder-action="enter-turma" data-folder-target="${escapeHtml(turma)}">
+          ${showNewBadge ? `<span class="cloud-folder-badge-new">Novo</span>` : ''}
+          <div class="cloud-folder-top">
+            <div class="cloud-folder-icon-wrap" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(52, 211, 153, 0.22) 100%); color: #10B981;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h3 class="cloud-folder-title">Turma ${escapeHtml(turma)}</h3>
+            <span class="cloud-folder-subtext">${escapeHtml(currentFolderState.classe)} Classe • Disciplinas</span>
+          </div>
+          <div class="cloud-folder-meta">
+            <span class="cloud-folder-count">${turmaFiles.length} ${turmaFiles.length === 1 ? 'ficheiro' : 'ficheiros'}</span>
+            <span>${formatFileSize(totalSize)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    attachFolderClickEvents();
+    return;
+  }
+
+  // Caso 3: Nível de Disciplinas (Para Aluno ou quando Professor/Admin selecionou a turma)
+  const isAluno = currentProfile && (currentProfile.role === 'aluno' || currentProfile.role === 'student');
+
+  let activeTargetCourse = null;
+  if (isAluno) {
+    activeTargetCourse = currentProfile.curso || 'Informática';
+  } else if (filterCurso && filterCurso.value !== 'todos') {
+    activeTargetCourse = filterCurso.value;
+  } else if (isTeacher) {
+    activeTargetCourse = currentProfile.curso || (Array.isArray(currentProfile.cursos) && currentProfile.cursos[0]) || null;
+  }
+
+  const activeTargetClasse = currentFolderState.classe || (filterClasse && filterClasse.value !== 'todas' ? filterClasse.value : null);
+
+  let availableDisciplinas = [];
+  if (isTeacher && Array.isArray(currentProfile.disciplinas) && currentProfile.disciplinas.length > 0 && (!filterCurso || filterCurso.value === 'todos')) {
+    availableDisciplinas = [...new Set(currentProfile.disciplinas)];
+  } else {
+    availableDisciplinas = getDisciplinasForContext({ course: activeTargetCourse, classe: activeTargetClasse });
+  }
+
+  if (foldersSectionTitle) {
+    const courseBadge = activeTargetCourse ? ` • ${activeTargetCourse}` : '';
+    foldersSectionTitle.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+      </svg>
+      <span>Pastas de Disciplinas${escapeHtml(courseBadge)}</span>
+    `;
+  }
+
+  if (foldersCountText) {
+    foldersCountText.textContent = `${availableDisciplinas.length} ${availableDisciplinas.length === 1 ? 'disciplina' : 'disciplinas'}`;
+  }
+
+  if (availableDisciplinas.length === 0) {
+    cloudFoldersGrid.innerHTML = `
+      <div class="state-empty" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
+        <span style="font-size: 14px; color: var(--color-text-secondary);">Nenhuma pasta de disciplina encontrada para este curso.</span>
+      </div>
+    `;
+    return;
+  }
+
+  cloudFoldersGrid.innerHTML = availableDisciplinas.map(disc => {
+    const discFiles = files.filter(f => {
+      if (f.disciplina !== disc) return false;
+      if (isAluno) {
+        const studentCurso = currentProfile.curso || 'Informática';
+        const studentClasse = currentProfile.classe || '10ª';
+        const studentTurma = currentProfile.turma || 'A';
+        if (f.curso && f.curso !== 'Geral' && f.curso !== 'todos' && !matchesCourseName(f.curso, studentCurso)) return false;
+        if (f.classe && f.classe !== 'Geral' && f.classe !== 'todas' && f.classe !== studentClasse) return false;
+        if (f.turma && f.turma !== 'Geral' && f.turma !== 'todas' && f.turma !== studentTurma) return false;
+      }
+      return true;
+    });
+
+    const totalSize = discFiles.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+    const hasRecent = discFiles.some(f => (Date.now() - new Date(f.created_at).getTime()) < 48 * 3600 * 1000);
+    const folderKey = `disc:${disc}`;
+    const showNewBadge = hasRecent && !isFolderSeen(folderKey);
+
+    return `
+      <div class="cloud-folder-card" data-folder-action="open-disciplina" data-folder-target="${escapeHtml(disc)}">
+        ${showNewBadge ? `<span class="cloud-folder-badge-new">Novo</span>` : ''}
+        <div class="cloud-folder-top">
+          <div class="cloud-folder-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <h3 class="cloud-folder-title">${escapeHtml(disc)}</h3>
+          <span class="cloud-folder-subtext">Toque para abrir pasta</span>
+        </div>
+        <div class="cloud-folder-meta">
+          <span class="cloud-folder-count">${discFiles.length} ${discFiles.length === 1 ? 'ficheiro' : 'ficheiros'}</span>
+          <span>${formatFileSize(totalSize)}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  attachFolderClickEvents();
+}
+
+/**
+ * Atualiza o Breadcrumb superior
+ */
+function updateBreadcrumbsUI() {
+  if (!cloudBreadcrumbs) return;
+
+  const crumbs = [
+    `<button type="button" class="breadcrumb-item breadcrumb-home" id="btn-crumb-root">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      </svg>
+      <span>Nuvem</span>
+    </button>`
+  ];
+
+  if (currentFolderState.classe) {
+    crumbs.push(`<span class="breadcrumb-sep">/</span>`);
+    crumbs.push(`
+      <button type="button" class="breadcrumb-item" id="btn-crumb-classe">
+        <span>${escapeHtml(currentFolderState.classe)} Classe</span>
+      </button>
+    `);
+  }
+
+  if (currentFolderState.turma) {
+    crumbs.push(`<span class="breadcrumb-sep">/</span>`);
+    crumbs.push(`
+      <button type="button" class="breadcrumb-item" id="btn-crumb-turma">
+        <span>Turma ${escapeHtml(currentFolderState.turma)}</span>
+      </button>
+    `);
+  }
+
+  if (currentFolderState.disciplina) {
+    crumbs.push(`<span class="breadcrumb-sep">/</span>`);
+    crumbs.push(`
+      <span class="breadcrumb-item is-current">
+        <span>${escapeHtml(currentFolderState.disciplina)}</span>
+      </span>
+    `);
+  }
+
+  cloudBreadcrumbs.innerHTML = crumbs.join('');
+
+  // Atualiza label do modo
+  if (cloudCurrentPathLabel) {
+    if (currentFolderState.disciplina) {
+      cloudCurrentPathLabel.textContent = currentFolderState.disciplina;
+    } else if (currentFolderState.turma) {
+      cloudCurrentPathLabel.textContent = `Turma ${currentFolderState.turma}`;
+    } else if (currentFolderState.classe) {
+      cloudCurrentPathLabel.textContent = `${currentFolderState.classe} Classe`;
+    } else {
+      const isAluno = currentProfile && (currentProfile.role === 'aluno' || currentProfile.role === 'student');
+      cloudCurrentPathLabel.textContent = isAluno && currentProfile.curso
+        ? `Disciplinas • ${currentProfile.curso}`
+        : 'Todas as Pastas';
+    }
+  }
+
+  // Listener para o Root
+  const rootBtn = document.getElementById('btn-crumb-root');
+  if (rootBtn) {
+    rootBtn.addEventListener('click', () => {
+      currentFolderState = { level: 'root', classe: null, turma: null, disciplina: null };
+      if (filterDisciplina) filterDisciplina.value = 'todas';
+      renderFilteredFiles();
+    });
+  }
+
+  const classeBtn = document.getElementById('btn-crumb-classe');
+  if (classeBtn) {
+    classeBtn.addEventListener('click', () => {
+      currentFolderState.level = 'turma';
+      currentFolderState.turma = null;
+      currentFolderState.disciplina = null;
+      if (filterDisciplina) filterDisciplina.value = 'todas';
+      renderFilteredFiles();
+    });
+  }
+
+  const turmaBtn = document.getElementById('btn-crumb-turma');
+  if (turmaBtn) {
+    turmaBtn.addEventListener('click', () => {
+      currentFolderState.level = 'disciplina';
+      currentFolderState.disciplina = null;
+      if (filterDisciplina) filterDisciplina.value = 'todas';
+      renderFilteredFiles();
+    });
+  }
+}
+
+/**
+ * Ativa cliques nos cartões de pastas (Abrir Diretório & Dismiss "Novo")
+ */
+function attachFolderClickEvents() {
+  if (!cloudFoldersGrid) return;
+
+  cloudFoldersGrid.querySelectorAll('[data-folder-action]').forEach(card => {
+    card.addEventListener('click', () => {
+      const action = card.getAttribute('data-folder-action');
+      const target = card.getAttribute('data-folder-target');
+
+      if (action === 'enter-classe') {
+        markFolderAsSeen(`classe:${target}`);
+        currentFolderState.level = 'turma';
+        currentFolderState.classe = target;
+        currentFolderState.turma = null;
+        currentFolderState.disciplina = null;
+        if (filterClasse) filterClasse.value = target;
+        renderFilteredFiles();
+      } else if (action === 'enter-turma') {
+        markFolderAsSeen(`turma:${target}`);
+        currentFolderState.level = 'disciplina';
+        currentFolderState.turma = target;
+        currentFolderState.disciplina = null;
+        if (filterTurma) filterTurma.value = target;
+        renderFilteredFiles();
+      } else if (action === 'open-disciplina' || action === 'select-disciplina') {
+        markFolderAsSeen(`disc:${target}`);
+        currentFolderState.disciplina = target;
+        if (filterDisciplina) filterDisciplina.value = target;
+        renderFilteredFiles();
+      }
+    });
+  });
+}
+
+/**
  * Renderiza a lista de ficheiros com base nos filtros selecionados
  */
 function renderFilteredFiles() {
@@ -390,17 +913,33 @@ function renderFilteredFiles() {
 
   // Aplica filtros sobre a base de dados
   let filtered = allFilesData.filter(file => {
-    // 1. Regra de segurança do perfil Aluno: nunca ver outro curso
-    if (currentProfile.role === 'aluno') {
+    // 1. Regra de segurança do perfil Aluno
+    const isAluno = currentProfile.role === 'aluno' || currentProfile.role === 'student';
+    if (isAluno) {
       const studentCurso = currentProfile.curso || 'Informática';
-      if (file.curso && file.curso !== 'Geral' && file.curso !== studentCurso) {
+      const studentClasse = currentProfile.classe || '10ª';
+      const studentTurma = currentProfile.turma || 'A';
+
+      if (file.curso && file.curso !== 'Geral' && file.curso !== 'todos' && !matchesCourseName(file.curso, studentCurso)) {
+        return false;
+      }
+      if (file.classe && file.classe !== 'Geral' && file.classe !== 'todas' && file.classe !== studentClasse) {
+        return false;
+      }
+      if (file.turma && file.turma !== 'Geral' && file.turma !== 'todas' && file.turma !== studentTurma) {
+        return false;
+      }
+
+      // Regra NetAcad / Privacidade:
+      // Se for upload de aluno com visibilidade 'professor', só o próprio autor do ficheiro pode ver!
+      if (file.visibility === 'professor' && file.uploader_id && file.uploader_id !== (currentProfile.id || currentUser?.id)) {
         return false;
       }
     }
 
     // 2. Filtro de Curso
     if (selCurso !== 'todos') {
-      if (file.curso && file.curso !== 'Geral' && file.curso !== selCurso) return false;
+      if (file.curso && file.curso !== 'Geral' && !matchesCourseName(file.curso, selCurso)) return false;
     }
 
     // 3. Filtro de Classe
@@ -431,8 +970,25 @@ function renderFilteredFiles() {
     return true;
   });
 
+  // Renderiza a grelha de pastas
+  renderFolderSystem(allFilesData);
+
   // Agrupamento por versão
   const groupedList = groupFilesByVersion(filtered);
+
+  // Ordenação selecionada
+  const selSort = filterSort ? filterSort.value : 'recentes';
+  if (selSort === 'nome-asc') {
+    groupedList.sort((a, b) => (a.latest.name || '').localeCompare(b.latest.name || ''));
+  } else if (selSort === 'nome-desc') {
+    groupedList.sort((a, b) => (b.latest.name || '').localeCompare(a.latest.name || ''));
+  } else if (selSort === 'tamanho-desc') {
+    groupedList.sort((a, b) => (b.latest.size || 0) - (a.latest.size || 0));
+  } else if (selSort === 'tamanho-asc') {
+    groupedList.sort((a, b) => (a.latest.size || 0) - (b.latest.size || 0));
+  } else {
+    groupedList.sort((a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime());
+  }
 
   // Actualiza contadores e indicadores
   if (totalFilesCount) {
@@ -442,11 +998,15 @@ function renderFilteredFiles() {
 
   if (activeFilterText) {
     const filtersUsed = [];
+    if (currentFolderState.disciplina) filtersUsed.push(`Disciplina: ${currentFolderState.disciplina}`);
     if (selCurso !== 'todos') filtersUsed.push(`Curso: ${selCurso}`);
     if (selClasse !== 'todas') filtersUsed.push(`Classe: ${selClasse}`);
     if (selTurma !== 'todas') filtersUsed.push(`Turma: ${selTurma}`);
-    if (selDisciplina !== 'todas') filtersUsed.push(`Disciplina: ${selDisciplina}`);
     if (searchTerm) filtersUsed.push(`"${searchTerm}"`);
+    if (selSort && selSort !== 'recentes') {
+      const sortMap = { 'nome-asc': 'Nome A–Z', 'nome-desc': 'Nome Z–A', 'tamanho-desc': 'Maior Tamanho', 'tamanho-asc': 'Menor Tamanho' };
+      filtersUsed.push(`Ordem: ${sortMap[selSort] || selSort}`);
+    }
 
     if (filtersUsed.length > 0) {
       activeFilterText.textContent = `Filtros: ${filtersUsed.join(' • ')}`;
@@ -460,21 +1020,91 @@ function renderFilteredFiles() {
   // Estado Vazio
   if (groupedList.length === 0) {
     cloudFilesContainer.innerHTML = `
-      <div class="state-empty" style="padding: 48px 16px; background: #ffffff; border: 1px solid var(--light-border); border-radius: 12px;">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--light-accent); opacity: 0.8;">
-          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
-        </svg>
-        <strong style="font-size: 15px; color: var(--light-text);">Nenhum ficheiro encontrado</strong>
-        <span>Não existem documentos para os critérios de filtro selecionados. Tente ajustar os filtros ou submeter um novo ficheiro.</span>
+           <div class="state-empty" style="padding: 60px 20px; background: var(--color-surface-base); border: 2px dashed var(--color-border-subtle); border-radius: 12px; margin-top: 20px; text-align: center; display: flex; flex-direction: column; align-items: center;">
+        <div style="background: rgba(37, 99, 235, 0.05); padding: 16px; border-radius: 50%; margin-bottom: 16px;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.5">
+            <path d="M20 16V9a2 2 0 0 0-2-2H9L7 3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"></path>
+            <path d="M12 12v6"></path>
+            <path d="M9 15h6"></path>
+          </svg>
+        </div>
+        <strong style="font-size: 17px; color: var(--color-text-primary); margin-bottom: 8px;">Pasta Vazia</strong>
+        <span style="color: var(--color-text-secondary); max-width: 320px; line-height: 1.5;">Não existem documentos nesta pasta com os critérios selecionados. Se fores docente, podes fazer o upload.</span>
       </div>
     `;
     return;
   }
 
-  // Renderiza cada grupo de ficheiro
-  cloudFilesContainer.innerHTML = groupedList.map(item => renderFileItem(item)).join('');
+  const htmlArr = groupedList.map(item => {
+    const latest = item.latest;
+    const safeName = latest.name || latest.nome || "Ficheiro sem nome";
+    const safeTurma = latest.turma || 'Todas';
+    const iconConfig = getFileIconType(latest.name, latest.tipo);
+    const isAdmin = currentProfile?.role === 'admin';
+    const isTeacher = (currentProfile?.role === 'professor' || currentProfile?.role === 'teacher');
+    
+    return `
+      <article class="cloud-file-card-wrapper" style="display: flex; flex-direction: column;">
+        <div class="cloud-file-card">
+          <div class="cloud-file-main">
+            <div class="cloud-file-icon ${iconConfig.cssClass}">
+              ${iconConfig.svg}
+            </div>
+            <div class="cloud-file-info">
+              <div class="cloud-file-title-row">
+                <span class="cloud-file-name" title="${safeName}">${safeName}</span>
+                <span class="cloud-version-pill">v${latest.version || 1}</span>
+              </div>
+              <div class="cloud-file-meta-row">
+                <span class="cloud-meta-discipline">${latest.disciplina || 'Geral'}</span>
+                <span>Turma ${safeTurma}</span>
+                <span>•</span>
+                <span>${formatFileSize(latest.size)}</span>
+                <span>•</span>
+                <span>${formatDateDisplay(latest.created_at)}</span>
+                <span>•</span>
+                <span>Por: ${latest.uploader_name || 'Docente'}</span>
+              </div>
+            </div>
+          </div>
+          <div class="cloud-file-actions">
+            ${(isAdmin || (isTeacher && latest.uploader_id === currentProfile?.id)) ? `
+            <button type="button" class="btn-delete-file" data-file-id="${latest.id}" data-file-url="${latest.file_url}" data-file-name="${safeName}" style="background: transparent; color: var(--color-danger); border: 1px solid var(--color-danger); margin-right: 8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              <span>Apagar</span>
+            </button>` : ''}
+            <button type="button" class="btn-download-file" data-file-id="${latest.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Descarregar</span>
+            </button>
+          </div>
+        </div>
+      </article>
+    `;
+  });
+  
+  cloudFilesContainer.innerHTML = htmlArr.join('');
 
-  // Adiciona eventos aos botões de Download Seguro (Signed URL)
+
+  // Eventos de Apagar Ficheiro
+  cloudFilesContainer.querySelectorAll('.btn-delete-file').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fileId = btn.getAttribute('data-file-id');
+      const fileUrl = btn.getAttribute('data-file-url');
+      const fileName = btn.getAttribute('data-file-name');
+      handleFileDelete(fileId, fileUrl, fileName);
+    });
+  });
+
+  // Eventos de Download
   cloudFilesContainer.querySelectorAll('.btn-download-file, .btn-version-download').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -483,200 +1113,61 @@ function renderFilteredFiles() {
     });
   });
 
-  // Adiciona eventos para alternar histórico de versões
+  // Acordeões de histórico
   cloudFilesContainer.querySelectorAll('.cloud-version-history-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-target-drawer');
-      const drawer = document.getElementById(targetId);
-      if (drawer) {
-        const isHidden = drawer.style.display === 'none';
-        drawer.style.display = isHidden ? 'flex' : 'none';
-        btn.setAttribute('aria-expanded', String(isHidden));
-        const iconSvg = btn.querySelector('svg');
-        if (iconSvg) {
-          iconSvg.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-        }
-      }
+      const target = document.getElementById(btn.getAttribute('data-target-drawer'));
+      if(target) target.style.display = target.style.display === 'none' ? 'flex' : 'none';
     });
   });
 }
 
-/**
- * Constrói o HTML de um ficheiro com suporte completo ao histórico de versões
- */
-function renderFileItem(item) {
-  const latest = item.latest;
-  const versions = item.versions;
-  const hasHistory = versions.length > 1;
-  const iconConfig = getFileIconType(latest.name, latest.mime_type);
-  const safeName = escapeHtml(latest.name || 'Documento');
-  const safeTurma = latest.turma ? `Turma ${escapeHtml(latest.turma)}` : 'Geral';
-  const drawerId = `drawer-${latest.id}`;
-
-  return `
-    <article class="cloud-file-card-wrapper" style="display: flex; flex-direction: column;">
-      <div class="cloud-file-card">
-        <div class="cloud-file-main">
-          <div class="cloud-file-icon ${iconConfig.cssClass}">
-            ${iconConfig.svg}
-          </div>
-
-          <div class="cloud-file-info">
-            <div class="cloud-file-title-row">
-              <span class="cloud-file-name" title="${safeName}">${safeName}</span>
-              <span class="cloud-version-pill">v${latest.version || 1}</span>
-
-              ${hasHistory ? `
-                <button
-                  type="button"
-                  class="cloud-version-history-btn"
-                  data-target-drawer="${drawerId}"
-                  aria-expanded="false"
-                  title="Ver histórico de versões anteriores"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition: transform 0.2s ease;">
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
-                  <span>Histórico (${versions.length} versões)</span>
-                </button>
-              ` : ''}
-            </div>
-
-            <div class="cloud-file-meta-row">
-              <span class="cloud-meta-discipline">${escapeHtml(latest.disciplina || 'Geral')}</span>
-              <span>${safeTurma}</span>
-              <span>•</span>
-              <span>${formatFileSize(latest.size)}</span>
-              <span>•</span>
-              <span>${formatDateDisplay(latest.created_at)}</span>
-              <span>•</span>
-              <span>Por: ${escapeHtml(latest.uploader_name || 'Docente')}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="cloud-file-actions">
-          <button
-            type="button"
-            class="btn-download-file"
-            data-file-id="${latest.id}"
-            aria-label="Descarregar ${safeName} versão ${latest.version || 1}"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span>Descarregar</span>
-          </button>
-        </div>
-      </div>
-
-      ${hasHistory ? `
-        <!-- Acordeão com Histórico de Versões (v1, v2, v3...) -->
-        <div id="${drawerId}" class="cloud-versions-drawer" style="display: none;">
-          <span class="version-history-title">Histórico de Versões do Ficheiro</span>
-          ${versions.map(v => `
-            <div class="version-row">
-              <div class="version-meta-left">
-                <span class="version-tag">v${v.version || 1} ${v.version === latest.version ? '(Actual)' : ''}</span>
-                <span class="version-date">${formatDateDisplay(v.created_at)}</span>
-                <span class="version-author">Por: ${escapeHtml(v.uploader_name || 'Utilizador')}</span>
-                <span>•</span>
-                <span>${formatFileSize(v.size)}</span>
-              </div>
-              <button
-                type="button"
-                class="btn-version-download"
-                data-file-id="${v.id}"
-                title="Descarregar v${v.version || 1}"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                <span>Descarregar v${v.version || 1}</span>
-              </button>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-    </article>
-  `;
+async function handleFileDelete(fileId, storagePath, fileName) {
+  const confirmed = await confirmModal({
+    title: 'Eliminar Ficheiro',
+    message: `Tem a certeza absoluta de que deseja eliminar o ficheiro "${fileName}"?\nEsta ação removerá o ficheiro permanentemente e não pode ser desfeita.`,
+    confirmText: 'Sim, Eliminar Ficheiro',
+    cancelText: 'Cancelar',
+    danger: true
+  });
+  if (!confirmed) return;
+  try {
+    toast('A apagar ficheiro...', 'info');
+    if (storagePath) {
+      await sb.storage.from('policloud').remove([storagePath]);
+    }
+    const { error: dbError } = await sb.from('files').delete().eq('id', fileId);
+    if (dbError) throw dbError;
+    toast('Ficheiro eliminado com sucesso.', 'success');
+    await log('REMOCAO_FICHEIRO', 'Ficheiro removido: ' + fileName);
+    await fetchAllFiles();
+  } catch (err) {
+    console.error(err);
+    toast('Ocorreu um erro.', 'error');
+  }
 }
 
-// ==========================================
-// DOWNLOAD SEGURO VIA STORAGE SIGNED URL
-// ==========================================
 async function handleSecureDownload(fileId) {
   const targetFile = allFilesData.find(f => f.id === fileId);
-  if (!targetFile) {
-    toast('Ficheiro não encontrado.', 'error');
-    return;
-  }
-
-  // 1. Verificação de permissão estrita: se for aluno, não pode descarregar de outro curso!
-  if (currentProfile.role === 'aluno') {
-    const studentCurso = currentProfile.curso || 'Informática';
-    if (targetFile.curso && targetFile.curso !== 'Geral' && targetFile.curso !== studentCurso) {
-      toast('Acesso negado: Alunos não têm autorização para descarregar ficheiros de outros cursos.', 'error');
-      return;
-    }
-  }
-
-  const storagePath = targetFile.storage_path || targetFile.file_url;
-  const fileName = targetFile.name || 'documento_policloud.pdf';
-
-  // Feedback visual temporário no botão
-  const clickedBtn = document.querySelector(`button[data-file-id="${fileId}"]`);
-  let originalHtml = '';
-  if (clickedBtn) {
-    originalHtml = clickedBtn.innerHTML;
-    clickedBtn.disabled = true;
-    clickedBtn.innerHTML = `
-      <div class="spinner spinner-light" style="width: 14px; height: 14px; border-width: 2px;"></div>
-      <span>A assinar link...</span>
-    `;
-  }
-
+  if (!targetFile) return;
+  toast('A preparar download seguro...', 'info');
   try {
-    // Supabase Storage: gera Signed URL temporária (60 segundos de validade)
-    const { data, error } = await sb.storage
-      .from('policloud')
-      .createSignedUrl(storagePath, 60, {
-        download: fileName
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data || !data.signedUrl) {
-      throw new Error('Não foi possível obter o link seguro para download.');
-    }
-
-    triggerBrowserDownload(data.signedUrl, fileName);
+    const { data, error } = await sb.storage.from('policloud').createSignedUrl(targetFile.file_url, 60, {
+      download: true
+    });
+    if (error) throw error;
+    
+    // Atualizar visualizações
+    const currentViews = targetFile.views || 0;
+    await sb.from('files').update({ views: currentViews + 1 }).eq('id', fileId);
+    
+    await log('download_ficheiro', 'files', fileId, currentProfile?.nome);
+    
+    window.location.href = data.signedUrl;
   } catch (err) {
-    console.error('Erro ao gerar download seguro:', err);
-    toast(`Erro ao descarregar ficheiro: ${err.message || 'Verifique as suas permissões de acesso.'}`, 'error');
-  } finally {
-    if (clickedBtn) {
-      clickedBtn.disabled = false;
-      clickedBtn.innerHTML = originalHtml;
-    }
+    console.error(err);
+    toast('Erro ao descarregar ficheiro.', 'error');
   }
-}
-
-function triggerBrowserDownload(url, filename) {
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 }
 
 // ==========================================
@@ -686,40 +1177,93 @@ function openUploadModal() {
   hideUploadAlert();
   resetUploadForm();
 
-  // Configuração contextual do formulário dependente do perfil:
-  if (currentProfile.role === 'aluno') {
-    // Aluno: só pode fazer upload dentro da sua própria turma!
-    if (uploadCurso) {
-      uploadCurso.value = currentProfile.curso || 'Informática';
-      uploadCurso.disabled = true;
-    }
-    if (uploadClasse) {
-      uploadClasse.value = currentProfile.classe || '12ª';
-      uploadClasse.disabled = true;
-    }
-    if (uploadTurma) {
-      uploadTurma.value = currentProfile.turma || 'INF-12A';
-      uploadTurma.disabled = true;
-    }
-    if (studentUploadNote) {
-      studentUploadNote.style.display = 'block';
-      if (studentTargetClassLabel) {
-        studentTargetClassLabel.textContent = `${currentProfile.curso || 'Informática'} • Turma ${currentProfile.turma || 'INF-12A'}`;
+  const uploadFolderContextPill = document.getElementById('upload-folder-context-pill');
+  const uploadContextName = document.getElementById('upload-context-name');
+  const uploadContextSubtext = document.getElementById('upload-context-subtext');
+  const uploadAcademicRow = document.getElementById('upload-academic-row');
+  const discGroup = document.getElementById('upload-disciplina-group');
+
+  const isInsideFolder = Boolean(currentFolderState.disciplina);
+
+  if (isInsideFolder) {
+    // Contexto automático: dentro de uma pasta não é preciso escolher disciplina/turma
+    if (uploadFolderContextPill) {
+      uploadFolderContextPill.style.display = 'flex';
+      if (uploadContextName) uploadContextName.textContent = currentFolderState.disciplina;
+      const subParts = [];
+      if (currentFolderState.classe) subParts.push(`${currentFolderState.classe} Classe`);
+      if (currentFolderState.turma) subParts.push(`Turma ${currentFolderState.turma}`);
+      if (currentProfile?.curso && currentProfile.role === 'aluno') subParts.push(currentProfile.curso);
+      if (uploadContextSubtext) {
+        uploadContextSubtext.textContent = subParts.length > 0 ? `(${subParts.join(' • ')})` : '';
       }
     }
-  } else {
-    // Professor / Admin: pode fazer upload em qualquer turma
-    if (uploadCurso) uploadCurso.disabled = false;
-    if (uploadClasse) uploadClasse.disabled = false;
-    if (uploadTurma) uploadTurma.disabled = false;
+
+    if (uploadDisciplina) {
+      // Garante que a opção existe no select (required)
+      if (![...uploadDisciplina.options].some(o => o.value === currentFolderState.disciplina)) {
+        const opt = document.createElement('option');
+        opt.value = currentFolderState.disciplina;
+        opt.textContent = currentFolderState.disciplina;
+        uploadDisciplina.appendChild(opt);
+      }
+      uploadDisciplina.value = currentFolderState.disciplina;
+    }
+
+    if (discGroup) discGroup.style.display = 'none';
+    if (uploadAcademicRow) uploadAcademicRow.style.display = 'none';
+    if (uploadTurmaGroup) uploadTurmaGroup.style.display = 'none';
     if (studentUploadNote) studentUploadNote.style.display = 'none';
+  } else {
+    if (uploadFolderContextPill) uploadFolderContextPill.style.display = 'none';
+    if (discGroup) discGroup.style.display = 'block';
+    if (uploadAcademicRow) uploadAcademicRow.style.display = 'grid';
+    if (uploadTurmaGroup) uploadTurmaGroup.style.display = 'block';
+
+    if (currentProfile.role === 'aluno' || currentProfile.role === 'student') {
+      const studentCurso = currentProfile.curso || 'Informática';
+      if (uploadCurso) { uploadCurso.value = studentCurso; uploadCurso.disabled = true; }
+      if (uploadClasse) { uploadClasse.value = currentProfile.classe || CLASSES[0]; uploadClasse.disabled = true; }
+      if (uploadTurma) { uploadTurma.value = currentProfile.turma || TURMAS[0]; uploadTurma.disabled = true; }
+      if (uploadDisciplina) {
+        const studentDiscs = getDisciplinasForContext({ course: studentCurso, classe: currentProfile.classe || null });
+        fillSelect(uploadDisciplina, studentDiscs, { value: '', label: 'Selecione a disciplina...' });
+      }
+      if (studentUploadNote) {
+        studentUploadNote.style.display = 'block';
+        if (studentTargetClassLabel) {
+          studentTargetClassLabel.textContent = `${studentCurso} • Turma ${currentProfile.turma || ''}`;
+        }
+      }
+    } else {
+      if (uploadCurso) {
+        uploadCurso.disabled = false;
+        if (filterCurso && filterCurso.value !== 'todos') {
+          uploadCurso.value = filterCurso.value;
+        }
+      }
+      if (uploadClasse) {
+        uploadClasse.disabled = false;
+        if (currentFolderState.classe) uploadClasse.value = currentFolderState.classe;
+      }
+      if (uploadTurma) {
+        uploadTurma.disabled = false;
+        if (currentFolderState.turma) uploadTurma.value = currentFolderState.turma;
+      }
+      if (uploadDisciplina) {
+        const activeUpCurso = uploadCurso?.value || (filterCurso && filterCurso.value !== 'todos' ? filterCurso.value : null);
+        const upDiscs = getDisciplinasForContext({ course: activeUpCurso, classe: uploadClasse?.value });
+        fillSelect(uploadDisciplina, upDiscs, { value: '', label: 'Selecione a disciplina...' });
+      }
+      if (studentUploadNote) studentUploadNote.style.display = 'none';
+    }
   }
 
-  if (uploadFileModal) uploadFileModal.classList.remove('hidden');
+  openM('upload-file-modal');
 }
 
 function closeUploadModal() {
-  if (uploadFileModal) uploadFileModal.classList.add('hidden');
+  closeM('upload-file-modal');
 }
 
 function showUploadAlert(msg, type = 'error') {
@@ -737,10 +1281,12 @@ function hideUploadAlert() {
 function resetUploadForm() {
   if (uploadFileForm) uploadFileForm.reset();
   selectedUploadFile = null;
+  if (fileInput) fileInput.value = '';
   if (filePreviewCard) filePreviewCard.style.display = 'none';
   if (fileDropzone) fileDropzone.style.display = 'flex';
   if (uploadProgressBox) uploadProgressBox.style.display = 'none';
   if (uploadProgressBar) uploadProgressBar.style.width = '0%';
+  if (btnSubmitUpload) btnSubmitUpload.disabled = false;
 }
 
 /**
@@ -753,17 +1299,12 @@ function handleFileSelection(file) {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
   const mime = (file.type || '').toLowerCase();
 
-  // 1. Validação de formato (PDF, DOCX, DOC, PNG, JPG, JPEG, WEBP)
-  const isExtAllowed = ALLOWED_EXTENSIONS.includes(ext);
-  const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mime);
-
-  if (!isExtAllowed && !isMimeAllowed) {
+  if (!ALLOWED_EXTENSIONS.includes(ext) && !ALLOWED_MIME_TYPES.includes(mime)) {
     showUploadAlert('Formato de ficheiro não suportado. Apenas são aceites documentos PDF, Word (.doc, .docx) e imagens (.png, .jpg, .jpeg, .webp).');
     selectedUploadFile = null;
     return;
   }
 
-  // 2. Validação de tamanho máximo (15MB)
   if (file.size > MAX_FILE_SIZE_BYTES) {
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
     showUploadAlert(`O ficheiro seleccionado tem ${sizeMb} MB e excede o limite máximo permitido de 15 MB.`);
@@ -771,7 +1312,6 @@ function handleFileSelection(file) {
     return;
   }
 
-  // Ficheiro válido
   selectedUploadFile = file;
 
   if (previewFileName) previewFileName.textContent = file.name;
@@ -807,27 +1347,29 @@ async function handleUploadSubmit(e) {
     return;
   }
 
-  const disciplina = uploadDisciplina ? uploadDisciplina.value : 'Geral';
+  const disciplina = currentFolderState.disciplina || (uploadDisciplina ? uploadDisciplina.value : '');
   if (!disciplina) {
     showUploadAlert('Por favor, selecione a disciplina.');
     return;
   }
 
-  // Regras de contexto
-  let targetCurso = uploadCurso.value;
-  let targetClasse = uploadClasse.value;
-  let targetTurma = uploadTurma.value;
+  let targetCurso = uploadCurso?.value || 'Geral';
+  let targetClasse = uploadClasse?.value || null;
+  let targetTurma = uploadTurma?.value || null;
 
-  // Se aluno, força o contexto do próprio perfil (segurança contra manipulação da UI)
+  if (currentFolderState.classe) targetClasse = currentFolderState.classe;
+  if (currentFolderState.turma) targetTurma = currentFolderState.turma;
+
+  // Aluno: força o contexto do próprio perfil (segurança contra manipulação da UI)
   if (currentProfile.role === 'aluno') {
-    targetCurso = currentProfile.curso || 'Informática';
-    targetClasse = currentProfile.classe || '12ª';
-    targetTurma = currentProfile.turma || 'INF-12A';
+    targetCurso = currentProfile.curso || targetCurso;
+    targetClasse = currentProfile.classe || targetClasse;
+    targetTurma = currentProfile.turma || targetTurma;
   }
 
-  btnSubmitUpload.disabled = true;
+  const visibility = 'geral';
 
-  // Ativa a barra de progresso
+  btnSubmitUpload.disabled = true;
   if (uploadProgressBox) uploadProgressBox.style.display = 'block';
   if (uploadProgressBar) uploadProgressBar.style.width = '20%';
   if (uploadProgressPercent) uploadProgressPercent.textContent = '20%';
@@ -836,98 +1378,66 @@ async function handleUploadSubmit(e) {
   try {
     const rawFileName = selectedUploadFile.name.trim();
 
-    // 1. Versionamento Automático:
-    // Se já existir um ficheiro com o mesmo nome no mesmo contexto de turma/curso,
-    // calcula a próxima versão em vez de sobrescrever/apagar a anterior!
+    // Versionamento: mesmo nome + mesma turma => nova versão
     const existingVersions = allFilesData.filter(f =>
-      f.name.toLowerCase() === rawFileName.toLowerCase() &&
-      (f.turma === targetTurma || (!f.turma && targetTurma === 'todas'))
+      (f.name || '').toLowerCase() === rawFileName.toLowerCase() &&
+      (f.turma || null) === (targetTurma === 'todas' ? null : targetTurma)
     );
-
     let nextVersion = 1;
     if (existingVersions.length > 0) {
-      const maxVer = Math.max(...existingVersions.map(f => f.version || 1));
-      nextVersion = maxVer + 1;
+      nextVersion = Math.max(...existingVersions.map(f => f.version || 1)) + 1;
     }
 
-    // Gera o caminho no Storage
     const sanitizedName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const folder = targetTurma ? targetTurma : (targetCurso || 'geral');
+    const folder = (targetTurma || targetCurso || 'geral').replace(/[^a-zA-Z0-9_-]/g, '_');
     const storagePath = `materiais/${folder}/${Date.now()}_v${nextVersion}_${sanitizedName}`;
 
-    // Progresso
     if (uploadProgressBar) uploadProgressBar.style.width = '55%';
     if (uploadProgressPercent) uploadProgressPercent.textContent = '55%';
     if (uploadProgressText) uploadProgressText.textContent = 'A enviar para o bucket policloud...';
 
-    if (isConfigPlaceholder()) {
-      // Simulação no ambiente Demo
-      await new Promise(r => setTimeout(r, 600));
+    const { error: uploadError } = await sb.storage
+      .from('policloud')
+      .upload(storagePath, selectedUploadFile, { cacheControl: '3600', upsert: false });
 
-      const newFileRecord = {
-        id: `file-${Date.now()}`,
+    if (uploadError) {
+      throw new Error(`Erro no Supabase Storage: ${uploadError.message}`);
+    }
+
+    if (uploadProgressBar) uploadProgressBar.style.width = '85%';
+    if (uploadProgressPercent) uploadProgressPercent.textContent = '85%';
+    if (uploadProgressText) uploadProgressText.textContent = 'A registar metadados na base de dados...';
+
+    const { data: insertedFile, error: dbError } = await sb
+      .from('files')
+      .insert({
         name: rawFileName,
-        storage_path: storagePath,
         file_url: storagePath,
+        storage_path: storagePath,
         size: selectedUploadFile.size,
-        mime_type: selectedUploadFile.type,
+        mime_type: selectedUploadFile.type || 'application/octet-stream',
         disciplina: disciplina,
         curso: targetCurso,
         classe: targetClasse,
         turma: targetTurma === 'todas' ? null : targetTurma,
         version: nextVersion,
-        uploader_id: currentUser.id,
+        visibility: visibility,
+        uploader_id: currentProfile.id,
         uploader_name: currentProfile.nome || 'Utilizador',
+        uploader_role: currentProfile.role || 'aluno',
         created_at: new Date().toISOString()
-      };
+      })
+      .select()
+      .single();
 
-      saveLocalDemoFile(newFileRecord);
-    } else {
-      // 2. Upload Real para o Bucket "policloud" no Supabase Storage
-      const { error: uploadError } = await sb.storage
-        .from('policloud')
-        .upload(storagePath, selectedUploadFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw new Error(`Erro no Supabase Storage: ${uploadError.message}`);
-      }
-
-      if (uploadProgressBar) uploadProgressBar.style.width = '85%';
-      if (uploadProgressPercent) uploadProgressPercent.textContent = '85%';
-      if (uploadProgressText) uploadProgressText.textContent = 'A registar metadados na base de dados...';
-
-      // 3. Registo na Tabela 'files'
-      const { data: insertedFile, error: dbError } = await sb
-        .from('files')
-        .insert({
-          name: rawFileName,
-          file_url: storagePath,
-          storage_path: storagePath,
-          size: selectedUploadFile.size,
-          mime_type: selectedUploadFile.type || 'application/octet-stream',
-          disciplina: disciplina,
-          curso: targetCurso,
-          classe: targetClasse,
-          turma: targetTurma === 'todas' ? null : targetTurma,
-          version: nextVersion,
-          uploader_id: currentProfile.id || currentUser.id,
-          uploader_name: currentProfile.nome || 'Docente / Utilizador',
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        throw new Error(`Erro ao registar metadados: ${dbError.message}`);
-      }
-
-      await log('upload_ficheiro', 'files', insertedFile?.id, currentProfile?.nome || '');
+    if (dbError) {
+      // Evita ficheiros órfãos no Storage
+      try { await sb.storage.from('policloud').remove([storagePath]); } catch (_) {}
+      throw new Error(`Erro ao registar metadados: ${dbError.message}`);
     }
 
-    // 100% Sucesso
+    try { await log('upload_ficheiro', 'files', insertedFile?.id, currentProfile?.nome || ''); } catch (_) {}
+
     if (uploadProgressBar) uploadProgressBar.style.width = '100%';
     if (uploadProgressPercent) uploadProgressPercent.textContent = '100%';
     if (uploadProgressText) uploadProgressText.textContent = 'Ficheiro carregado com sucesso!';
@@ -942,10 +1452,7 @@ async function handleUploadSubmit(e) {
     await fetchAllFiles();
     renderFilteredFiles();
 
-    setTimeout(() => {
-      closeUploadModal();
-    }, 1000);
-
+    setTimeout(() => closeUploadModal(), 1000);
   } catch (err) {
     console.error('Erro no upload de ficheiro:', err);
     showUploadAlert(err.message || 'Ocorreu um erro ao submeter o ficheiro.');
@@ -956,158 +1463,143 @@ async function handleUploadSubmit(e) {
 }
 
 // ==========================================
-// Inicialização da Página Cloud
+// População de Selects (Filtros & Upload)
 // ==========================================
-async function initCloudPage() {
-  initSidebar();
-  mouseTrack();
+function fillSelect(selectEl, items, firstOption = null, labelFn = (v) => v) {
+  if (!selectEl) return;
+  const prev = selectEl.value;
+  selectEl.innerHTML =
+    (firstOption ? `<option value="${escapeHtml(firstOption.value)}">${escapeHtml(firstOption.label)}</option>` : '') +
+    items.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(labelFn(v))}</option>`).join('');
+  if (prev && [...selectEl.options].some(o => o.value === prev)) selectEl.value = prev;
+}
 
-  // ACESSO: todos os perfis autenticados. Verifica sessão; sem sessão, redirecciona para login.html.
-  const profile = await requireAuth(['aluno', 'professor', 'admin']);
-  if (!profile) return;
+function updateDisciplinasSelects() {
+  const isAluno = currentProfile?.role === 'aluno' || currentProfile?.role === 'student';
+  const isTeacher = currentProfile?.role === 'professor' || currentProfile?.role === 'teacher';
 
-  currentProfile = profile;
-  currentUser = profile;
+  let targetCourse = null;
+  if (isAluno) {
+    targetCourse = currentProfile.curso || 'Informática';
+  } else if (filterCurso && filterCurso.value !== 'todos') {
+    targetCourse = filterCurso.value;
+  } else if (isTeacher) {
+    targetCourse = currentProfile.curso || (Array.isArray(currentProfile.cursos) && currentProfile.cursos[0]) || null;
+  }
 
-  // 1. Configura a Sidebar
-  setupSidebarByRole(currentProfile.role, currentProfile.nome);
-  
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await signOut();
+  const targetClasse = filterClasse && filterClasse.value !== 'todas' ? filterClasse.value : null;
+
+  let discNames = getDisciplinasForContext({ course: targetCourse, classe: targetClasse });
+  if (isTeacher && Array.isArray(currentProfile.disciplinas) && currentProfile.disciplinas.length > 0 && (!filterCurso || filterCurso.value === 'todos')) {
+    discNames = [...new Set(currentProfile.disciplinas)];
+  }
+
+  const prevFilter = filterDisciplina ? filterDisciplina.value : null;
+  fillSelect(filterDisciplina, discNames, { value: 'todas', label: 'Todas as Disciplinas' });
+  if (prevFilter && discNames.includes(prevFilter)) {
+    filterDisciplina.value = prevFilter;
+  }
+
+  const uploadCourseTarget = isAluno 
+    ? (currentProfile.curso || 'Informática') 
+    : (uploadCurso?.value || targetCourse);
+  const uploadDiscs = getDisciplinasForContext({ course: uploadCourseTarget, classe: uploadClasse?.value });
+  fillSelect(uploadDisciplina, uploadDiscs, { value: '', label: 'Selecione a disciplina...' });
+}
+
+async function populateSelects() {
+  // Disciplinas vindas da BD (com fallback para a lista estática)
+  try {
+    const discs = await getDisciplinasDB();
+    dynamicDisciplinas = Array.isArray(discs) ? discs : [];
+  } catch (_) {
+    dynamicDisciplinas = [];
+  }
+
+  fillSelect(filterCurso, CURSOS, { value: 'todos', label: 'Todos os Cursos' });
+  fillSelect(filterClasse, CLASSES, { value: 'todas', label: 'Todas as Classes' }, c => `${c} Classe`);
+  fillSelect(filterTurma, TURMAS, { value: 'todas', label: 'Todas as Turmas' }, t => `Turma ${t}`);
+
+  fillSelect(uploadCurso, [...CURSOS, 'Geral'], null, c => (c === 'Geral' ? 'Tronco Comum (Todos)' : c));
+  fillSelect(uploadClasse, CLASSES, null, c => `${c} Classe`);
+  fillSelect(uploadTurma, [...TURMAS, 'todas'], null, t => (t === 'todas' ? 'Todas as Turmas' : `Turma ${t}`));
+
+  // Aluno: filtros de curso/turma fixos no seu contexto
+  if (currentProfile.role === 'aluno' || currentProfile.role === 'student') {
+    if (filterCursoWrap) filterCursoWrap.style.display = 'none';
+    if (filterTurmaWrap) filterTurmaWrap.style.display = 'none';
+    if (filterCurso) filterCurso.value = currentProfile.curso || 'Informática';
+  }
+
+  updateDisciplinasSelects();
+}
+
+function setupFilterListeners() {
+  [filterCurso, filterClasse, filterTurma, filterDisciplina, filterSort].forEach(el => {
+    if (el) el.addEventListener('change', () => {
+      if (el === filterCurso || el === filterClasse) {
+        updateDisciplinasSelects();
+      }
+      if (el === filterDisciplina) {
+        currentFolderState.disciplina = filterDisciplina.value !== 'todas' ? filterDisciplina.value : null;
+      }
+      renderFilteredFiles();
     });
-  }
-  setupDemoRoleSwitcher(currentProfile.role);
-
-  // População dinâmica dos selects com constantes do sb.js
-  if (filterClasse) {
-    filterClasse.innerHTML = `
-      <option value="todas">Todas as Classes</option>
-      ${CLASSES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('')}
-    `;
-  }
-  if (uploadClasse) {
-    uploadClasse.innerHTML = `
-      ${CLASSES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('')}
-      <option value="Geral">Todas as Classes</option>
-    `;
-  }
-  if (uploadCurso) {
-    uploadCurso.innerHTML = `
-      ${CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
-      <option value="Geral">Tronco Comum (Todos)</option>
-    `;
-  }
-
-  // 3. Regras de Visibilidade e Filtros Iniciais por Perfil:
-  if (currentProfile.role === 'aluno') {
-    const studentCurso = currentProfile.curso || 'Informática';
-    const studentTurma = currentProfile.turma || 'INF-12A';
-
-    // Aluno: só vê e descarrega ficheiros do seu próprio curso/turma
-    if (filterCurso) {
-      filterCurso.innerHTML = `
-        <option value="${escapeHtml(studentCurso)}" selected>Curso: ${escapeHtml(studentCurso)}</option>
-      `;
-      filterCurso.disabled = true;
-    }
-
-    if (filterTurma) {
-      filterTurma.innerHTML = `
-        <option value="todas">Geral (${escapeHtml(studentCurso)})</option>
-        <option value="${escapeHtml(studentTurma)}" selected>A sua Turma (${escapeHtml(studentTurma)})</option>
-      `;
-      filterTurma.value = studentTurma;
-    }
-  } else {
-    // Professor / Admin: têm selector amplo e livre com base nas constantes
-    if (filterCurso) {
-      filterCurso.disabled = false;
-      filterCurso.innerHTML = `
-        <option value="todos">Todos os Cursos</option>
-        ${CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
-      `;
-    }
-    if (filterTurma) {
-      filterTurma.disabled = false;
-      const generatedTurmas = [];
-      CLASSES.forEach(c => {
-        TURMAS.forEach(t => {
-          generatedTurmas.push(`${c.replace('ª', '')}-${t}`);
-        });
-      });
-      filterTurma.innerHTML = `
-        <option value="todas">Todas as Turmas</option>
-        ${generatedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
-      `;
-    }
-
-    if (uploadTurma) {
-      const generatedTurmas = [];
-      CLASSES.forEach(c => {
-        TURMAS.forEach(t => {
-          generatedTurmas.push(`${c.replace('ª', '')}-${t}`);
-        });
-      });
-      uploadTurma.innerHTML = `
-        ${generatedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
-        <option value="todas">Geral (Todo o Curso)</option>
-      `;
-    }
-
-    // Se vier do dashboard do professor com parâmetro ?turma=...
-    const urlParams = new URLSearchParams(window.location.search);
-    const paramTurma = urlParams.get('turma');
-    if (paramTurma && filterTurma) {
-      filterTurma.value = paramTurma;
-    }
-  }
-
-  // 4. Listeners para os Filtros
-  [filterCurso, filterClasse, filterTurma, filterDisciplina].forEach(sel => {
-    if (sel) {
-      sel.addEventListener('change', renderFilteredFiles);
-    }
   });
 
   if (filterSearch) {
-    filterSearch.addEventListener('input', renderFilteredFiles);
+    let t = null;
+    filterSearch.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(renderFilteredFiles, 180);
+    });
   }
 
   if (btnResetFilters) {
     btnResetFilters.addEventListener('click', () => {
+      if (filterCurso) filterCurso.value = (currentProfile?.role === 'aluno' || currentProfile?.role === 'student') ? (currentProfile.curso || 'Informática') : 'todos';
       if (filterClasse) filterClasse.value = 'todas';
+      if (filterTurma) filterTurma.value = 'todas';
       if (filterDisciplina) filterDisciplina.value = 'todas';
+      if (filterSort) filterSort.value = 'recentes';
       if (filterSearch) filterSearch.value = '';
-
-      if (currentProfile.role !== 'aluno') {
-        if (filterCurso) filterCurso.value = 'todos';
-        if (filterTurma) filterTurma.value = 'todas';
-      }
+      currentFolderState = { level: 'root', classe: null, turma: null, disciplina: null };
+      updateDisciplinasSelects();
       renderFilteredFiles();
     });
   }
+}
 
-  // 5. Configurar Modal de Upload
+function setupUploadListeners() {
   if (btnOpenUpload) btnOpenUpload.addEventListener('click', openUploadModal);
   if (btnCloseUploadModal) btnCloseUploadModal.addEventListener('click', closeUploadModal);
   if (btnCancelUpload) btnCancelUpload.addEventListener('click', closeUploadModal);
 
-  // Dropzone Drag & Drop
+  if (uploadCurso) {
+    uploadCurso.addEventListener('change', () => {
+      const selectedCurso = uploadCurso.value;
+      const targetClasse = uploadClasse?.value || null;
+      const discsForUpload = getDisciplinasForContext({ course: selectedCurso, classe: targetClasse });
+      fillSelect(uploadDisciplina, discsForUpload, { value: '', label: 'Selecione a disciplina...' });
+    });
+  }
+
+  if (uploadClasse) {
+    uploadClasse.addEventListener('change', () => {
+      const selectedCurso = uploadCurso?.value || null;
+      const targetClasse = uploadClasse.value;
+      const discsForUpload = getDisciplinasForContext({ course: selectedCurso, classe: targetClasse });
+      fillSelect(uploadDisciplina, discsForUpload, { value: '', label: 'Selecione a disciplina...' });
+    });
+  }
+
   if (fileDropzone && fileInput) {
     fileDropzone.addEventListener('click', () => fileInput.click());
-
     fileDropzone.addEventListener('dragover', (e) => {
       e.preventDefault();
       fileDropzone.classList.add('dragover');
     });
-
-    fileDropzone.addEventListener('dragleave', () => {
-      fileDropzone.classList.remove('dragover');
-    });
-
+    fileDropzone.addEventListener('dragleave', () => fileDropzone.classList.remove('dragover'));
     fileDropzone.addEventListener('drop', (e) => {
       e.preventDefault();
       fileDropzone.classList.remove('dragover');
@@ -1115,23 +1607,14 @@ async function initCloudPage() {
         handleFileSelection(e.dataTransfer.files[0]);
       }
     });
-
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileSelection(e.target.files[0]);
-      }
+      if (e.target.files && e.target.files[0]) handleFileSelection(e.target.files[0]);
     });
   }
 
-  if (btnRemoveSelectedFile) {
-    btnRemoveSelectedFile.addEventListener('click', clearSelectedFile);
-  }
+  if (btnRemoveSelectedFile) btnRemoveSelectedFile.addEventListener('click', clearSelectedFile);
+  if (uploadFileForm) uploadFileForm.addEventListener('submit', handleUploadSubmit);
 
-  if (uploadFileForm) {
-    uploadFileForm.addEventListener('submit', handleUploadSubmit);
-  }
-
-  // Fechar modal ao clicar fora ou com ESC
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeUploadModal();
   });
@@ -1141,18 +1624,49 @@ async function initCloudPage() {
       if (e.target === uploadFileModal) closeUploadModal();
     });
   }
+}
 
-  // 6. Carregar Ficheiros Iniciais
-  await fetchAllFiles();
-  renderFilteredFiles();
+// ==========================================
+// Inicialização da Página Cloud
+// ==========================================
+async function initCloudApp() {
+  try { initSidebar(); } catch (_) {}
+  try { mouseTrack(); } catch (_) {}
 
-  // Ocultar Overlay de Sessão
-  if (sessionOverlay) {
-    sessionOverlay.classList.add('fade-out');
-    setTimeout(() => {
-      sessionOverlay.style.display = 'none';
-    }, 300);
+  // requireAuth() (sb.js) normaliza role (student→aluno, teacher→professor) e nome (full_name→nome)
+  const profile = await requireAuth(['aluno', 'professor', 'admin']);
+  if (!profile) return;
+
+  currentProfile = profile;
+  currentUser = profile;
+
+  setupSidebarByRole(currentProfile.role, currentProfile.nome);
+  setupDemoRoleSwitcher(currentProfile.role);
+
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) logoutBtn.addEventListener('click', async (e) => { e.preventDefault(); await signOut(); });
+
+  setupUploadListeners();
+  setupFilterListeners();
+
+  try {
+    await populateSelects();
+  } catch (err) {
+    console.error('Erro ao preencher filtros:', err);
+  }
+
+  try {
+    await fetchAllFiles();
+    renderFilteredFiles();
+  } catch (err) {
+    console.error('Erro ao renderizar a Cloud:', err);
+    if (cloudFilesContainer) {
+      cloudFilesContainer.innerHTML = `<div class="state-empty" style="padding: 40px 20px; text-align:center;">Não foi possível carregar os ficheiros. Tente novamente.</div>`;
+    }
+  } finally {
+    if (sessionOverlay) sessionOverlay.style.display = 'none';
   }
 }
 
-document.addEventListener('DOMContentLoaded', initCloudPage);
+document.addEventListener('DOMContentLoaded', initCloudApp);
+

@@ -94,6 +94,14 @@
             </svg>
             <span>Cloud (Ficheiros)</span>
           </a>
+
+          <a href="/mensagens.html" class="nav-item" id="nav-item-mensagens">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Mensagens & Chat</span>
+            <span class="nav-badge-count hidden" id="sidebar-unread-badge">1</span>
+          </a>
         </nav>
       </div>
 
@@ -141,7 +149,7 @@
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
               </svg>
-              IPPLN • Espaço Pedagógico de Turma
+              IPPLN â€¢ Espaço Pedagógico de Turma
             </span>
 
             <h1 id="mural-main-title" class="news-header-title">Mural & Calendário</h1>
@@ -312,6 +320,29 @@
               <span id="calendar-filter-indicator" class="news-date-text">Ordenado por data</span>
             </div>
 
+            <!-- Filtros por Categoria de Evento -->
+            <div class="calendar-categories-bar" role="group" aria-label="Filtrar por tipo de evento">
+              <button type="button" class="category-filter-btn active" data-category="todas">
+                <span>Todas as Datas</span>
+              </button>
+              <button type="button" class="category-filter-btn" data-category="exame">
+                <span class="cat-dot cat-dot-exame" aria-hidden="true"></span>
+                <span>Provas & Exames</span>
+              </button>
+              <button type="button" class="category-filter-btn" data-category="entrega">
+                <span class="cat-dot cat-dot-entrega" aria-hidden="true"></span>
+                <span>Entregas de Trabalhos</span>
+              </button>
+              <button type="button" class="category-filter-btn" data-category="reuniao">
+                <span class="cat-dot cat-dot-reuniao" aria-hidden="true"></span>
+                <span>Reuniões & Conselhos</span>
+              </button>
+              <button type="button" class="category-filter-btn" data-category="aula">
+                <span class="cat-dot cat-dot-aula" aria-hidden="true"></span>
+                <span>Aulas & Oficinas</span>
+              </button>
+            </div>
+
             <!-- Grid de Eventos do Calendário -->
             <div id="calendar-events-container" class="calendar-events-grid" aria-live="polite">
               <div class="state-loading">
@@ -354,23 +385,34 @@
       </header>
 
       <form id="form-create-post">
+        <input type="hidden" id="post-editing-id" value="" />
         <div class="admin-modal-body">
           <div id="post-form-alert" class="alert-box"></div>
+
+          <!-- Curso Destinatário -->
+          <div class="form-group-custom">
+            <label for="post-curso-select" class="form-label-custom">
+              Curso <span class="label-required">*</span>
+            </label>
+            <select id="post-curso-select" name="curso" class="form-input-custom" required>
+            </select>
+          </div>
+
+          <!-- Classe Destinatária -->
+          <div class="form-group-custom">
+            <label for="post-classe-select" class="form-label-custom">
+              Classe <span class="label-required">*</span>
+            </label>
+            <select id="post-classe-select" name="classe" class="form-input-custom" required>
+            </select>
+          </div>
 
           <!-- Turma Destinatária -->
           <div class="form-group-custom">
             <label for="post-turma-select" class="form-label-custom">
-              Turma de Destino <span class="label-required">*</span>
+              Turma <span class="label-required">*</span>
             </label>
             <select id="post-turma-select" name="turma" class="form-input-custom" required>
-              <option value="INF-10A">Turma INF-10A (Informática)</option>
-              <option value="INF-11A">Turma INF-11A (Informática)</option>
-              <option value="INF-12A" selected>Turma INF-12A (Informática)</option>
-              <option value="ELE-10A">Turma ELE-10A (Electricidade)</option>
-              <option value="ELE-11A">Turma ELE-11A (Electricidade)</option>
-              <option value="MEC-12A">Turma MEC-12A (Mecânica)</option>
-              <option value="QUI-10A">Turma QUI-10A (Química)</option>
-              <option value="todas">Geral (Todas as Turmas do IPPLN)</option>
             </select>
             <span class="form-help-text">Escolha a turma específica que visualizará esta publicação.</span>
           </div>
@@ -445,8 +487,27 @@
       </header>
 
       <form id="form-create-event">
+        <input type="hidden" id="event-editing-id" value="" />
         <div class="admin-modal-body">
           <div id="event-form-alert" class="alert-box"></div>
+
+          <!-- Curso Convocado -->
+          <div class="form-group-custom">
+            <label for="event-curso-select" class="form-label-custom">
+              Curso <span class="label-required">*</span>
+            </label>
+            <select id="event-curso-select" name="curso" class="form-input-custom" required>
+            </select>
+          </div>
+
+          <!-- Classe Convocada -->
+          <div class="form-group-custom">
+            <label for="event-classe-select" class="form-label-custom">
+              Classe <span class="label-required">*</span>
+            </label>
+            <select id="event-classe-select" name="classe" class="form-input-custom" required>
+            </select>
+          </div>
 
           <!-- Turma Destinatária -->
           <div class="form-group-custom">
@@ -454,14 +515,6 @@
               Turma Convocada <span class="label-required">*</span>
             </label>
             <select id="event-turma-select" name="turma" class="form-input-custom" required>
-              <option value="INF-10A">Turma INF-10A (Informática)</option>
-              <option value="INF-11A">Turma INF-11A (Informática)</option>
-              <option value="INF-12A" selected>Turma INF-12A (Informática)</option>
-              <option value="ELE-10A">Turma ELE-10A (Electricidade)</option>
-              <option value="ELE-11A">Turma ELE-11A (Electricidade)</option>
-              <option value="MEC-12A">Turma MEC-12A (Mecânica)</option>
-              <option value="QUI-10A">Turma QUI-10A (Química)</option>
-              <option value="todas">Geral (Todo o Instituto IPPLN)</option>
             </select>
           </div>
 
@@ -545,3 +598,4 @@
   <script type="module" src="./js/mural.js"></script>
 </body>
 </html>
+

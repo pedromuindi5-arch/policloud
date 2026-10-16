@@ -2,6 +2,8 @@
 // Lógica do Dashboard do Aluno (dashboard-aluno.html)
 
 import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { getStudentAlerts,
+  initRealtimeMessages, dismissStudentAlert, dismissPushNotification, markMessagesAsReadForUser } from './messages-service.js';
 import './theme.js';
 
 // Elementos do DOM
@@ -99,15 +101,10 @@ async function loadStudentFiles(profile) {
   try {
     let query = sb
       .from('files')
-      .select('id, name, file_url, size, curso, turma, created_at')
-      .order('created_at', { ascending: false })
-      .limit(4);
+      .select('id, name, file_url, size, curso, classe, turma, created_at')
+      .order('created_at', { ascending: false });
 
-    if (profile.curso) {
-      query = query.or(`curso.eq.${profile.curso},curso.is.null`);
-    }
-
-    const { data: files, error } = await query;
+    const { data: rawFiles, error } = await query;
 
     if (error) {
       filesContainer.innerHTML = `
@@ -118,13 +115,24 @@ async function loadStudentFiles(profile) {
       return;
     }
 
+    const studentCurso = profile.curso;
+    const studentClasse = profile.classe;
+    const studentTurma = profile.turma;
+
+    const files = (rawFiles || []).filter(file => {
+      if (file.curso && file.curso !== 'Geral' && file.curso !== 'todos' && file.curso !== studentCurso) return false;
+      if (file.classe && file.classe !== 'Geral' && file.classe !== 'todas' && file.classe !== studentClasse) return false;
+      if (file.turma && file.turma !== 'Geral' && file.turma !== 'todas' && file.turma !== studentTurma) return false;
+      return true;
+    }).slice(0, 4);
+
     if (!files || files.length === 0) {
       filesContainer.innerHTML = `
         <div class="state-empty">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
-          <span>Nenhum ficheiro recente partilhado para o seu curso.</span>
+          <span>Nenhum ficheiro recente para a sua turma.</span>
         </div>
       `;
       return;
@@ -174,15 +182,10 @@ async function loadMuralPreview(profile) {
   try {
     let query = sb
       .from('mural_posts')
-      .select('id, author_name, content, turma, created_at')
-      .order('created_at', { ascending: false })
-      .limit(3);
+      .select('id, author_name, content, curso, classe, turma, created_at')
+      .order('created_at', { ascending: false });
 
-    if (profile.turma) {
-      query = query.or(`turma.eq.${profile.turma},turma.is.null`);
-    }
-
-    const { data: posts, error } = await query;
+    const { data: rawPosts, error } = await query;
 
     if (error) {
       muralContainer.innerHTML = `
@@ -192,6 +195,17 @@ async function loadMuralPreview(profile) {
       `;
       return;
     }
+
+    const studentCurso = profile.curso;
+    const studentClasse = profile.classe;
+    const studentTurma = profile.turma;
+
+    const posts = (rawPosts || []).filter(post => {
+      if (post.curso && post.curso !== 'todos' && post.curso !== 'Geral' && post.curso !== studentCurso) return false;
+      if (post.classe && post.classe !== 'todas' && post.classe !== 'Geral' && post.classe !== studentClasse) return false;
+      if (post.turma && post.turma !== 'todas' && post.turma !== 'Geral' && post.turma !== studentTurma) return false;
+      return true;
+    }).slice(0, 3);
 
     if (!posts || posts.length === 0) {
       muralContainer.innerHTML = `
@@ -278,8 +292,14 @@ async function initStudentDashboard() {
   await Promise.all([
     loadRecentNews(),
     loadStudentFiles(profile),
-    loadMuralPreview(profile)
+    loadMuralPreview(profile),
+    loadStudentNotifications(profile)
   ]);
+
+  // Ouvir mensagens atualizadas em tempo real
+  window.addEventListener('policloud_chat_updated', async () => {
+    await loadStudentNotifications(profile);
+  });
 
   // Remove overlay
   if (sessionOverlay) {
@@ -287,5 +307,97 @@ async function initStudentDashboard() {
   }
 }
 
+/**
+ * Carrega e exibe alertas/notificações push no topo do painel do aluno
+ */
+async function loadStudentNotifications(profile) {
+  const container = document.getElementById('student-notifications-area');
+  const badge = document.getElementById('sidebar-unread-badge');
+  if (!container) return;
+
+  try {
+    const alerts = await getStudentAlerts(profile);
+
+    if (alerts.length === 0) {
+      container.innerHTML = '';
+      if (badge) badge.classList.add('hidden');
+      return;
+    }
+
+    if (badge) badge.classList.remove('hidden');
+
+    container.innerHTML = alerts.map(a => {
+      return `
+        <div class="student-notification-banner" data-alert-id="${escapeHtml(a.id)}">
+          <div class="alert-left">
+            <div class="alert-icon-wrap" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="alert-title">${escapeHtml(a.title)}</div>
+              <div class="alert-desc">${escapeHtml(a.description)}</div>
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button type="button" class="btn btn-secondary btn-sm btn-dismiss-alert" style="padding: 6px 12px; font-size: 12px;">Dispensar</button>
+            <a href="${a.link}" class="btn btn-primary btn-sm btn-view-alert" style="padding: 6px 14px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>Ver</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Listener para dispensar ou ver alerta
+    container.querySelectorAll('.student-notification-banner').forEach(banner => {
+      const alertId = banner.getAttribute('data-alert-id');
+      const btnDismiss = banner.querySelector('.btn-dismiss-alert');
+      const btnView = banner.querySelector('.btn-view-alert');
+
+      if (btnDismiss) {
+        btnDismiss.addEventListener('click', () => {
+          dismissStudentAlert(alertId);
+          if (alertId.startsWith('msg-')) {
+            const rawId = alertId.replace('msg-', '');
+            dismissPushNotification(rawId);
+            if (profile?.id) markMessagesAsReadForUser(profile.id, [rawId]);
+          }
+          banner.remove();
+          if (container.children.length === 0 && badge) {
+            badge.classList.add('hidden');
+          }
+        });
+      }
+
+      if (btnView) {
+        btnView.addEventListener('click', () => {
+          dismissStudentAlert(alertId);
+          if (alertId.startsWith('msg-')) {
+            const rawId = alertId.replace('msg-', '');
+            dismissPushNotification(rawId);
+            if (profile?.id) markMessagesAsReadForUser(profile.id, [rawId]);
+          }
+        });
+      }
+    });
+
+  } catch (err) {
+    console.warn('Erro ao carregar notificações do aluno:', err);
+  }
+}
+
+// Atualizar alertas quando a janela recebe foco (ex: volta do chat)
+window.addEventListener('focus', async () => {
+  const profile = await getProfile();
+  if (profile) await loadStudentNotifications(profile);
+});
+
 initStudentDashboard();
+
 

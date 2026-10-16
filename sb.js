@@ -5,9 +5,38 @@ const ANON = 'sb_publishable_Fh8LqzjabeF9D77J1cyNrA_qDrX0ySg';
 
 export const sb = createClient(URL, ANON);
 
+// Cliente isolado (sem persistência) usado pelo admin para registar novas contas
+// sem substituir a sessão actual do administrador no browser.
+export function createIsolatedClient() {
+  return createClient(URL, ANON, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'policloud-isolated-signup' }
+  });
+}
+
 export const CURSOS  = ['Informática','Electrónica','Desenhador Projetista','Frio e Climatização','Mecânica','Perfuração e Petróleo','Energias Renováveis'];
 export const CLASSES = ['10ª','11ª','12ª','13ª'];
-export const TURMAS  = ['A','B'];
+export const TURMAS  = ['A', 'B', 'C', 'D'];
+export const DISCIPLINAS = [
+  'Redes de Computadores',
+  'Sistemas Digitais',
+  'Programação Web',
+  'Técnicas e Linguagens de Programação',
+  'Sistemas Operativos',
+  'Máquinas Eléctricas',
+  'Circuitos Electrónicos',
+  'Electrotecnia Teórica',
+  'Tecnologia dos Materiais',
+  'Desenho Técnico',
+  'Instalações Eléctricas',
+  'Matemática',
+  'Física',
+  'Química',
+  'Língua Portuguesa',
+  'Língua Inglesa',
+  'Educação Física',
+  'Formação de Atitudes Integradoras',
+  'Organização e Gestão Industrial'
+];
 
 export async function getProfile() {
   try {
@@ -18,10 +47,39 @@ export async function getProfile() {
     if (profile) {
       // Alias: o código usa .nome mas a BD tem full_name
       profile.nome = profile.full_name || profile.nome || '';
-      // Alias: converte roles BD (teacher/student) para PT (professor/aluno)
-      profile.rolePT = profile.role === 'teacher' ? 'professor'
-                     : profile.role === 'student'  ? 'aluno'
-                     : profile.role || '';
+      
+      // Normalização universal dos papéis:
+      const r = (profile.role || '').toLowerCase();
+      if (r === 'student' || r === 'aluno') {
+        profile.role = 'aluno';
+      } else if (r === 'teacher' || r === 'professor') {
+        profile.role = 'professor';
+      } else if (r === 'admin') {
+        profile.role = 'admin';
+      }
+      profile.rolePT = profile.role;
+
+      // Normalização de coleções multi-seleção para Professor
+      const parseArrayField = (val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') {
+          val = val.trim();
+          if (val.startsWith('[') && val.endsWith(']')) {
+            try { return JSON.parse(val); } catch (e) {}
+          }
+          if (val.includes(',')) {
+            return val.split(',').map(s => s.trim()).filter(Boolean);
+          }
+          return [val];
+        }
+        return [];
+      };
+
+      profile.cursos = parseArrayField(profile.cursos || profile.curso);
+      profile.classes = parseArrayField(profile.classes || profile.classe);
+      profile.turmas = parseArrayField(profile.turmas || profile.turma);
+      profile.disciplinas = parseArrayField(profile.disciplinas || profile.disciplina);
     }
     return profile;
   } catch (e) {
@@ -68,8 +126,258 @@ export function toast(msg, type = 'success') {
 
 export function initials(n = '') { return (n||'U').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 export function fDate(s) { if (!s) return ''; return new Date(s).toLocaleDateString('pt-AO',{day:'2-digit',month:'short',year:'numeric'}); }
-export function openM(id)  { document.getElementById(id)?.classList.add('open'); }
-export function closeM(id) { document.getElementById(id)?.classList.remove('open'); }
+let _lastFocusedElement = null;
+const _activeModals = new Set();
+
+export function openM(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+
+  _lastFocusedElement = document.activeElement;
+  _activeModals.add(id);
+
+  modal.classList.remove('hidden');
+  modal.classList.add('open');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-hidden', 'false');
+  if (!modal.getAttribute('role')) {
+    modal.setAttribute('role', 'dialog');
+  }
+
+  document.body.style.overflow = 'hidden';
+
+  // Foco inicial automático
+  requestAnimationFrame(() => {
+    const focusable = modal.querySelectorAll('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    if (focusable.length > 0) {
+      const firstInput = Array.from(focusable).find(el => ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) || focusable[0];
+      firstInput.focus();
+    }
+  });
+
+  // Fecha ao clicar fora do cartão modal
+  if (!modal._hasBackdropListener) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeM(id);
+      }
+    });
+    modal._hasBackdropListener = true;
+  }
+}
+
+export function closeM(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+
+  modal.classList.remove('open');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  _activeModals.delete(id);
+
+  if (_activeModals.size === 0) {
+    document.body.style.overflow = '';
+  }
+
+  // Retorna foco para o elemento de origem
+  if (_lastFocusedElement && typeof _lastFocusedElement.focus === 'function') {
+    _lastFocusedElement.focus();
+    _lastFocusedElement = null;
+  }
+}
+
+/**
+ * Modal de Confirmação Institucional e Seguro (Substitui confirm() nativo do navegador)
+ * @param {Object} options
+ * @param {string} options.title - Título do modal
+ * @param {string} options.message - Mensagem descritiva da confirmação
+ * @param {string} [options.confirmText='Confirmar'] - Texto do botão de confirmação
+ * @param {string} [options.cancelText='Cancelar'] - Texto do botão de cancelamento
+ * @param {boolean} [options.danger=true] - Se é uma acção destrutiva (vermelho) ou normal (azul)
+ * @returns {Promise<boolean>}
+ */
+export function confirmModal({
+  title = 'Confirmação',
+  message = 'Tem a certeza de que pretende continuar?',
+  confirmText = 'Confirmar',
+  cancelText = 'Cancelar',
+  danger = true
+} = {}) {
+  return new Promise((resolve) => {
+    let modal = document.getElementById('policloud-confirm-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'policloud-confirm-modal';
+      modal.className = 'admin-modal-backdrop hidden';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-hidden', 'true');
+      modal.style.zIndex = '100000';
+      modal.innerHTML = `
+        <div class="admin-modal-card" style="max-width: 440px; border-radius: var(--radius-xl, 20px); overflow: hidden; padding: 0; border: 1px solid var(--color-border-subtle); box-shadow: var(--shadow-lg);">
+          <div style="padding: 30px 24px 20px; display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <div id="confirm-modal-icon-wrap" style="width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; flex-shrink: 0;"></div>
+            <h2 id="confirm-modal-title" style="font-size: 18px; font-weight: 700; color: var(--color-text-primary); margin: 0 0 8px; letter-spacing: -0.01em;"></h2>
+            <p id="confirm-modal-message" style="font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; margin: 0; white-space: pre-line; word-break: break-word;"></p>
+          </div>
+          <div style="padding: 16px 24px 24px; display: flex; gap: 12px; justify-content: center;">
+            <button type="button" id="confirm-modal-btn-cancel" class="btn-modal-cancel" style="flex: 1; padding: 11px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; cursor: pointer;">
+              Cancelar
+            </button>
+            <button type="button" id="confirm-modal-btn-confirm" class="btn-modal-submit" style="flex: 1; padding: 11px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; cursor: pointer;">
+              Confirmar
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    const titleEl = document.getElementById('confirm-modal-title');
+    const msgEl = document.getElementById('confirm-modal-message');
+    const iconWrap = document.getElementById('confirm-modal-icon-wrap');
+    const btnCancel = document.getElementById('confirm-modal-btn-cancel');
+    const btnConfirm = document.getElementById('confirm-modal-btn-confirm');
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    btnCancel.textContent = cancelText;
+    btnConfirm.textContent = confirmText;
+
+    if (danger) {
+      iconWrap.style.background = 'rgba(239, 68, 68, 0.12)';
+      iconWrap.style.color = '#EF4444';
+      iconWrap.style.border = '1px solid rgba(239, 68, 68, 0.25)';
+      iconWrap.innerHTML = `
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      `;
+      btnConfirm.style.background = 'linear-gradient(135deg, #EF4444, #DC2626)';
+      btnConfirm.style.color = '#FFFFFF';
+      btnConfirm.style.boxShadow = '0 4px 14px rgba(239, 68, 68, 0.35)';
+      btnConfirm.style.border = 'none';
+    } else {
+      iconWrap.style.background = 'rgba(37, 99, 235, 0.12)';
+      iconWrap.style.color = 'var(--color-accent)';
+      iconWrap.style.border = '1px solid rgba(37, 99, 235, 0.25)';
+      iconWrap.innerHTML = `
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      `;
+      btnConfirm.style.background = 'var(--color-accent)';
+      btnConfirm.style.color = '#FFFFFF';
+      btnConfirm.style.boxShadow = '0 4px 14px rgba(37, 99, 235, 0.35)';
+      btnConfirm.style.border = 'none';
+    }
+
+    let isResolved = false;
+    const cleanup = () => {
+      btnConfirm.removeEventListener('click', onConfirm);
+      btnCancel.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      window.removeEventListener('keydown', onKeyDown);
+      observer.disconnect();
+      closeM('policloud-confirm-modal');
+    };
+
+    const onConfirm = () => {
+      if (isResolved) return;
+      isResolved = true;
+      cleanup();
+      resolve(true);
+    };
+
+    const onCancel = () => {
+      if (isResolved) return;
+      isResolved = true;
+      cleanup();
+      resolve(false);
+    };
+
+    const onBackdrop = (e) => {
+      if (e.target === modal) {
+        onCancel();
+      }
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+
+    const observer = new MutationObserver(() => {
+      if (modal.classList.contains('hidden') && !isResolved) {
+        onCancel();
+      }
+    });
+    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+    btnConfirm.addEventListener('click', onConfirm);
+    btnCancel.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+    window.addEventListener('keydown', onKeyDown);
+
+    openM('policloud-confirm-modal');
+
+    // Foco inicial no Cancelar para segurança
+    requestAnimationFrame(() => {
+      if (btnCancel) btnCancel.focus();
+    });
+  });
+}
+
+// Listener global para fechar com Escape e trancar foco (focus trap)
+if (typeof window !== 'undefined' && !window._modalGlobalListenersAttached) {
+  window.addEventListener('keydown', (e) => {
+    if (_activeModals.size === 0) return;
+
+    // Fechar com Escape
+    if (e.key === 'Escape') {
+      const lastModalId = Array.from(_activeModals).pop();
+      if (lastModalId) {
+        e.preventDefault();
+        closeM(lastModalId);
+      }
+      return;
+    }
+
+    // Focus Trap com Tab
+    if (e.key === 'Tab') {
+      const currentModalId = Array.from(_activeModals).pop();
+      const currentModal = document.getElementById(currentModalId);
+      if (!currentModal) return;
+
+      const focusableElements = Array.from(currentModal.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter(el => el.offsetParent !== null);
+
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  });
+  window._modalGlobalListenersAttached = true;
+}
 
 export function initSidebar() {
   const sb_ = document.querySelector('.sidebar-dark,.sidebar-light');
@@ -94,3 +402,24 @@ export function ftIcon(name) {
   const m = { pdf:['PDF','rgba(239,68,68,.15)','#F87171'], docx:['DOC','rgba(37,99,235,.15)','#60A5FA'], doc:['DOC','rgba(37,99,235,.15)','#60A5FA'], png:['IMG','rgba(168,85,247,.15)','#C084FC'], jpg:['IMG','rgba(168,85,247,.15)','#C084FC'], jpeg:['IMG','rgba(168,85,247,.15)','#C084FC'] };
   return m[e] || [e.toUpperCase()||'FILE','rgba(99,102,241,.15)','#A78BFA'];
 }
+
+export async function getDisciplinasDB() {
+  try {
+    const { data, error } = await sb.from('disciplinas').select('*').order('nome', { ascending: true });
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (e) {}
+  return DISCIPLINAS.map(d => ({ id: d, nome: d, curso: 'Geral', classe: 'Todas', carga_horaria: '4h / semana' }));
+}
+
+export async function getTurmasDB() {
+  try {
+    const { data, error } = await sb.from('turmas_academicas').select('*').order('nome', { ascending: true });
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (e) {}
+  return TURMAS.map(t => ({ id: t, nome: t, curso: 'Informática', classe: '10ª' }));
+}
+

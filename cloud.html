@@ -94,6 +94,14 @@
             </svg>
             <span>Cloud (Ficheiros)</span>
           </a>
+
+          <a href="/mensagens.html" class="nav-item" id="nav-item-mensagens">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Mensagens & Chat</span>
+            <span class="nav-badge-count hidden" id="sidebar-unread-badge">1</span>
+          </a>
         </nav>
       </div>
 
@@ -132,7 +140,7 @@
       <div class="content-container">
 
         <!-- Cabeçalho da Nuvem de Ficheiros -->
-        <header class="cloud-header-card">
+        <header class="cloud-header-card" id="cloud-main-header">
           <div class="cloud-header-info">
             <span class="cloud-header-tag">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -159,8 +167,42 @@
           </div>
         </header>
 
+        <!-- Barra de Navegação por Pastas e Breadcrumbs (Estilo Kintsugi / Synapse) -->
+        <nav class="cloud-breadcrumb-bar" id="cloud-breadcrumb-bar" aria-label="Navegação em pastas">
+          <div class="cloud-breadcrumb-list" id="cloud-breadcrumbs">
+            <button type="button" class="breadcrumb-item breadcrumb-home" id="btn-crumb-root">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              <span>Nuvem</span>
+            </button>
+          </div>
+
+          <div class="cloud-view-actions">
+            <span class="cloud-view-mode-pill" id="cloud-current-path-label">Todas as Disciplinas</span>
+          </div>
+        </nav>
+
+        <!-- SECÇÃO DE PASTAS (DIRETÓRIOS POR DISCIPLINA / CLASSE) -->
+        <section id="cloud-folders-section" class="cloud-folders-section" aria-label="Pastas de disciplinas e turmas">
+          <div class="news-section-title-wrap" id="folders-section-title-wrap">
+            <h2 class="news-section-title" id="folders-section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+              </svg>
+              <span>Pastas de Disciplinas</span>
+            </h2>
+            <span id="folders-count-text" class="news-date-text">A calcular pastas...</span>
+          </div>
+
+          <div id="cloud-folders-grid" class="cloud-folders-grid">
+            <!-- Renderizado dinamicamente -->
+          </div>
+        </section>
+
         <!-- Barra de Filtros e Pesquisa Académica (Glassmorphism) -->
-        <section class="cloud-filters-panel" aria-label="Filtros de ficheiros">
+        <section class="cloud-filters-panel" id="cloud-filters-panel" aria-label="Filtros de ficheiros">
           <div class="cloud-filters-row">
             <!-- 1. Curso -->
             <div class="cloud-filter-item" id="filter-curso-wrap">
@@ -236,7 +278,7 @@
             </div>
           </div>
 
-          <!-- Metadados de Filtro Activo -->
+          <!-- Metadados de Filtro Activo e Ordenação -->
           <div class="cloud-filters-meta-row">
             <span class="cloud-active-filter-badge">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -245,21 +287,34 @@
               <span id="active-filter-text">A mostrar todos os ficheiros disponíveis</span>
             </span>
 
-            <button type="button" id="btn-reset-filters" class="btn-reset-filters">
-              Repor Filtros
-            </button>
+            <div class="cloud-meta-actions">
+              <div class="cloud-sort-wrapper">
+                <label for="filter-sort" class="cloud-sort-label">Ordenar:</label>
+                <select id="filter-sort" class="cloud-sort-select" aria-label="Ordenar ficheiros por">
+                  <option value="recentes" selected>Mais Recentes</option>
+                  <option value="nome-asc">Nome (A – Z)</option>
+                  <option value="nome-desc">Nome (Z – A)</option>
+                  <option value="tamanho-desc">Maior Tamanho</option>
+                  <option value="tamanho-asc">Menor Tamanho</option>
+                </select>
+              </div>
+
+              <button type="button" id="btn-reset-filters" class="btn-reset-filters">
+                Repor Filtros
+              </button>
+            </div>
           </div>
         </section>
 
         <!-- Lista de Ficheiros -->
         <section aria-label="Repositório de Ficheiros">
           <div class="news-section-title-wrap">
-            <h2 class="news-section-title" style="color: var(--light-text);">
+            <h2 class="news-section-title" id="files-section-title">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
                 <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
               </svg>
-              Documentos & Recursos
+              <span>Documentos & Recursos</span>
             </h2>
             <span id="total-files-count" class="news-date-text">A carregar...</span>
           </div>
@@ -307,13 +362,25 @@
         <div class="admin-modal-body">
           <div id="upload-form-alert" class="alert-box"></div>
 
+          <!-- Contexto Automático de Pasta Aberta -->
+          <div id="upload-folder-context-pill" class="upload-folder-context-pill" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+            </svg>
+            <div>
+              <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; display: block; opacity: 0.85;">Pasta de Destino Automática</span>
+              <strong id="upload-context-name" style="font-size: 14px;">Redes de Computadores</strong>
+              <span id="upload-context-subtext" style="font-size: 12px; opacity: 0.8; margin-left: 6px;"></span>
+            </div>
+          </div>
+
           <!-- Zona de Drag & Drop de Ficheiro -->
           <div class="form-group-custom">
             <label class="form-label-custom">
               Ficheiro a Carregar <span class="label-required">*</span>
             </label>
             <div id="file-dropzone" class="news-upload-dropzone">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--light-accent); margin-bottom: 8px;">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--color-accent); margin-bottom: 8px;">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
@@ -365,7 +432,7 @@
           </div>
 
           <!-- Disciplina -->
-          <div class="form-group-custom">
+          <div class="form-group-custom" id="upload-disciplina-group">
             <label for="upload-disciplina" class="form-label-custom">
               Disciplina <span class="label-required">*</span>
             </label>
@@ -385,7 +452,7 @@
           </div>
 
           <!-- Contexto Académico (Curso, Classe, Turma) -->
-          <div class="form-row-2col">
+          <div class="form-row-2col" id="upload-academic-row">
             <!-- Curso -->
             <div class="form-group-custom" id="upload-curso-group">
               <label for="upload-curso" class="form-label-custom">
@@ -401,7 +468,7 @@
             </div>
 
             <!-- Classe -->
-            <div class="form-group-custom">
+            <div class="form-group-custom" id="upload-classe-group">
               <label for="upload-classe" class="form-label-custom">Classe</label>
               <select id="upload-classe" name="classe" class="form-input-custom">
                 <option value="12ª">12ª Classe</option>
@@ -419,19 +486,11 @@
               Turma de Destino <span class="label-required">*</span>
             </label>
             <select id="upload-turma" name="turma" class="form-input-custom" required>
-              <option value="INF-12A">Turma INF-12A</option>
-              <option value="INF-11A">Turma INF-11A</option>
-              <option value="INF-10A">Turma INF-10A</option>
-              <option value="ELE-11A">Turma ELE-11A</option>
-              <option value="ELE-10A">Turma ELE-10A</option>
-              <option value="MEC-12A">Turma MEC-12A</option>
-              <option value="QUI-10A">Turma QUI-10A</option>
-              <option value="todas">Geral (Todo o Curso)</option>
             </select>
           </div>
 
           <!-- Indicador Informativo Estrito para Aluno -->
-          <div id="student-upload-note" style="display: none; padding: 10px 14px; background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.2); border-radius: 8px; font-size: 12.5px; color: var(--light-accent); margin-top: 4px;">
+          <div id="student-upload-note" style="display: none; padding: 10px 14px; background: rgba(0, 113, 227, 0.08); border: 1px solid rgba(0, 113, 227, 0.2); border-radius: 8px; font-size: 12.5px; color: var(--color-accent); margin-top: 4px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="16" x2="12" y2="12"/>

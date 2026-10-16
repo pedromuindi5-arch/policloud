@@ -1,7 +1,7 @@
 // PoliCloud - Intranet Escolar IPPLN
 // Lógica da Página de Notícias (noticias.html)
 
-import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { sb, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
 import './theme.js';
 
 function isConfigPlaceholder() { return false; }
@@ -79,6 +79,7 @@ const DEFAULT_DEMO_NEWS = [
     content: `O Instituto Politécnico Pascoal Luvualu do Namibe (IPPLN) dá as boas-vindas a toda a comunidade escolar para o arranque de mais um ano de formação técnico-profissional de excelência.\n\nDurante este primeiro trimestre, apelamos ao rigor, assiduidade e máximo aproveitamento nas salas de aula e nos laboratórios práticos. As turmas das 10ªs, 11ªs, 12ªs e 13ªs classes devem consultar com regularidade o calendário de avaliações contínuas e o mural das respectivas turmas através do PoliCloud.\n\nA secretaria escolar informa ainda que a confirmação de matrículas pendentes decorre até ao final da corrente semana.`,
     cover_image_url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80',
     pinned: true,
+    category: 'direccao',
     created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -88,6 +89,7 @@ const DEFAULT_DEMO_NEWS = [
     content: `No âmbito do plano de melhoria contínua das infraestruturas de ensino técnico do IPPLN, foram concluídos os trabalhos de instalação de novos computadores, bastidores de telecomunicações e postos de ensaio electrotécnicos.\n\nOs novos recursos estarão disponíveis a partir de quarta-feira para as turmas dos cursos de Informática, Electricidade e Mecânica, possibilitando um contacto ainda mais aprofundado com as tecnologias do mercado de trabalho angolano.`,
     cover_image_url: 'https://images.unsplash.com/photo-1581092921461-eab62e97a780?auto=format&fit=crop&w=800&q=80',
     pinned: false,
+    category: 'oficinas',
     created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -97,6 +99,7 @@ const DEFAULT_DEMO_NEWS = [
     content: `Encontram-se abertas as inscrições para a edição anual da Feira Provincial de Inovação e Ciência Tecnológica do Namibe. Todos os alunos do IPPLN com projectos de automação, desenvolvimento de software, energias renováveis ou mecânica aplicada são convidados a submeter as suas propostas na sala de coordenação pedagógica até ao dia 30 do corrente mês.`,
     cover_image_url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80',
     pinned: false,
+    category: 'eventos',
     created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -106,9 +109,27 @@ const DEFAULT_DEMO_NEWS = [
     content: `Recordamos a todos os formandos das oficinas mecânicas e químicas que a participação nas sessões de segurança industrial é obrigatória antes do início das práticas laboratoriais intensivas deste semestre. Trazer equipamento de protecção individual regularizado.`,
     cover_image_url: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?auto=format&fit=crop&w=800&q=80',
     pinned: false,
+    category: 'pedagogico',
     created_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
   }
 ];
+
+let activeNewsCategory = 'todas';
+
+function getNewsCategoryConfig(category) {
+  switch (category) {
+    case 'direccao':
+      return { label: 'Direcção & Secretaria', class: 'cat-direccao' };
+    case 'pedagogico':
+      return { label: 'Pedagógico & Aulas', class: 'cat-pedagogico' };
+    case 'oficinas':
+      return { label: 'Oficinas & Laboratórios', class: 'cat-oficinas' };
+    case 'eventos':
+      return { label: 'Eventos & Ciência', class: 'cat-eventos' };
+    default:
+      return { label: 'Comunicado Geral', class: 'cat-direccao' };
+  }
+}
 
 /**
  * Utilitários
@@ -296,6 +317,15 @@ function openNewsReader(newsItem) {
     readerPinnedBadge.style.display = isPinned ? 'inline-flex' : 'none';
   }
 
+  const readerCategoryBadge = document.getElementById('reader-category-badge');
+  const readerCategoryText = document.getElementById('reader-category-text');
+  if (readerCategoryBadge) {
+    const catConfig = getNewsCategoryConfig(newsItem.category || 'direccao');
+    readerCategoryBadge.className = `news-category-tag ${catConfig.class}`;
+    if (readerCategoryText) readerCategoryText.textContent = catConfig.label;
+    readerCategoryBadge.style.display = 'inline-flex';
+  }
+
   if (readerDate) readerDate.textContent = formatDate(newsItem.created_at);
   if (readerTitle) readerTitle.textContent = newsItem.title || 'Comunicado';
   if (readerSubtitle) {
@@ -305,14 +335,32 @@ function openNewsReader(newsItem) {
   }
   if (readerContent) readerContent.textContent = newsItem.content || newsItem.corpo || '';
 
-  newsReaderModal.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+  openM('news-reader-modal');
 }
 
 function closeNewsReader() {
-  if (!newsReaderModal) return;
-  newsReaderModal.classList.add('hidden');
-  document.body.style.overflow = '';
+  closeM('news-reader-modal');
+}
+
+/**
+ * Verifica se o utilizador autenticado tem permissão para editar ou eliminar a notícia
+ * - Admin: pode gerir notícias de todos
+ * - Professor: pode gerir apenas as notícias dele
+ * - Aluno: não pode gerir nenhuma notícia
+ */
+function canManageNews(item) {
+  if (!currentProfile) return false;
+  if (currentProfile.role === 'admin') return true;
+  if (currentProfile.role === 'professor') {
+    if (item.author_id && item.author_id === currentProfile.id) return true;
+    if (item.created_by && item.created_by === currentProfile.id) return true;
+    if (item.author_name && currentProfile.nome && (
+      item.author_name.toLowerCase().includes(currentProfile.nome.toLowerCase()) ||
+      currentProfile.nome.toLowerCase().includes(item.author_name.toLowerCase())
+    )) return true;
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -321,15 +369,19 @@ function closeNewsReader() {
 function renderNews(newsList) {
   if (!pinnedSection || !pinnedNewsContainer || !regularNewsContainer) return;
 
+  const filteredNews = activeNewsCategory === 'todas'
+    ? newsList
+    : newsList.filter(item => (item.category || 'direccao') === activeNewsCategory);
+
   if (totalNewsCount) {
-    totalNewsCount.textContent = `${newsList.length} notícia${newsList.length === 1 ? '' : 's'}`;
+    totalNewsCount.textContent = `${filteredNews.length} notícia${filteredNews.length === 1 ? '' : 's'}`;
   }
 
   // Separação de notícias fixadas e regulares
   const pinnedNews = [];
   const regularNews = [];
 
-  newsList.forEach(item => {
+  filteredNews.forEach(item => {
     const isPinned = item.pinned === true || item.is_pinned === true || item.fixado === true;
     if (isPinned) {
       pinnedNews.push(item);
@@ -345,6 +397,8 @@ function renderNews(newsList) {
       const coverUrl = item.cover_image_url || item.image_url || item.foto_capa;
       const subtitle = item.subtitle || item.subtitulo || '';
       const content = item.content || item.corpo || '';
+      const catConfig = getNewsCategoryConfig(item.category || 'direccao');
+      const canManage = canManageNews(item);
 
       return `
         <article class="news-featured-card" data-id="${escapeHtml(item.id)}">
@@ -373,6 +427,10 @@ function renderNews(newsList) {
                   </svg>
                   Fixado no Topo
                 </span>
+                <span class="news-category-tag ${catConfig.class}">
+                  <span class="cat-dot" aria-hidden="true"></span>
+                  ${escapeHtml(catConfig.label)}
+                </span>
                 <span class="news-date-text">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
@@ -387,14 +445,32 @@ function renderNews(newsList) {
               ${subtitle ? `<h4 class="news-featured-subtitle">${escapeHtml(subtitle)}</h4>` : ''}
               <p class="news-featured-excerpt">${escapeHtml(content)}</p>
             </div>
-            <div class="news-card-footer">
+            <div class="news-card-footer" style="padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <span class="news-date-text">Gabinete de Comunicação • IPPLN</span>
-              <button type="button" class="btn-read-news btn-read-item" data-id="${escapeHtml(item.id)}">
-                <span>Ver tudo</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
+              <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: auto;">
+                ${canManage ? `
+                  <button type="button" class="btn-table-action btn-edit-news" data-id="${escapeHtml(item.id)}" title="Editar notícia">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    <span>Editar</span>
+                  </button>
+                  <button type="button" class="btn-table-action action-status-danger btn-delete-news" data-id="${escapeHtml(item.id)}" title="Eliminar notícia">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    <span>Eliminar</span>
+                  </button>
+                ` : ''}
+                <button type="button" class="btn-read-news btn-read-item" data-id="${escapeHtml(item.id)}">
+                  <span>Ver tudo</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </article>
@@ -411,6 +487,8 @@ function renderNews(newsList) {
       const coverUrl = item.cover_image_url || item.image_url || item.foto_capa;
       const subtitle = item.subtitle || item.subtitulo || '';
       const content = item.content || item.corpo || '';
+      const catConfig = getNewsCategoryConfig(item.category || 'direccao');
+      const canManage = canManageNews(item);
 
       return `
         <article class="news-card" data-id="${escapeHtml(item.id)}">
@@ -431,6 +509,10 @@ function renderNews(newsList) {
           </div>
           <div class="news-card-content">
             <div class="news-card-top-row">
+              <span class="news-category-tag ${catConfig.class}">
+                <span class="cat-dot" aria-hidden="true"></span>
+                ${escapeHtml(catConfig.label)}
+              </span>
               <span class="news-date-text">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
@@ -444,14 +526,32 @@ function renderNews(newsList) {
             <h3 class="news-card-title">${escapeHtml(item.title)}</h3>
             ${subtitle ? `<h4 class="news-card-subtitle">${escapeHtml(subtitle)}</h4>` : ''}
             <p class="news-card-excerpt">${escapeHtml(content)}</p>
-            <div class="news-card-footer" style="padding-top: 14px;">
+            <div class="news-card-footer" style="padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <span class="news-date-text">IPPLN</span>
-              <button type="button" class="btn-read-news btn-read-item" data-id="${escapeHtml(item.id)}">
-                <span>Ver mais</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
+              <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: auto;">
+                ${canManage ? `
+                  <button type="button" class="btn-table-action btn-edit-news" data-id="${escapeHtml(item.id)}" title="Editar notícia">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    <span>Editar</span>
+                  </button>
+                  <button type="button" class="btn-table-action action-status-danger btn-delete-news" data-id="${escapeHtml(item.id)}" title="Eliminar notícia">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    <span>Eliminar</span>
+                  </button>
+                ` : ''}
+                <button type="button" class="btn-read-news btn-read-item" data-id="${escapeHtml(item.id)}">
+                  <span>Ver mais</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </article>
@@ -466,7 +566,7 @@ function renderNews(newsList) {
           <path d="M15 18h-5"/>
           <path d="M10 6h8v4h-8V6Z"/>
         </svg>
-        <span>Não existem notícias publicadas de momento.</span>
+        <span>Não existem notícias publicadas nesta categoria.</span>
       </div>
     `;
   } else {
@@ -481,6 +581,41 @@ function renderNews(newsList) {
       if (item) {
         openNewsReader(item);
       }
+    });
+  });
+
+  // Listeners para editar notícias
+  document.querySelectorAll('.btn-edit-news').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      openEditNews(id);
+    });
+  });
+
+  // Listeners para eliminar notícias
+  document.querySelectorAll('.btn-delete-news').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      await deleteNews(id);
+    });
+  });
+}
+
+/**
+ * Configura os botões de filtro por categoria de notícias
+ */
+function setupNewsCategoryFilters() {
+  const pills = document.querySelectorAll('.news-category-pill');
+  if (!pills || pills.length === 0) return;
+
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      activeNewsCategory = pill.getAttribute('data-category') || 'todas';
+      renderNews(localNewsStore);
     });
   });
 }
@@ -552,14 +687,142 @@ async function uploadCoverImage(file) {
 /**
  * Processo de submissão do formulário de criação de notícia (Apenas Admin)
  */
+/**
+ * Abre a modal para criar uma nova notícia
+ */
+function openCreateNews() {
+  const editingInput = document.getElementById('news-editing-id');
+  if (editingInput) editingInput.value = '';
+
+  const modalTitle = document.getElementById('modal-create-title');
+  if (modalTitle) modalTitle.textContent = 'Publicar Nova Notícia Oficial';
+
+  const modalSub = document.querySelector('.admin-modal-sub');
+  if (modalSub) modalSub.textContent = 'Gabinete de Comunicação e Direcção do IPPLN';
+
+  if (createNewsForm) createNewsForm.reset();
+  clearSelectedFile();
+  hideFormAlert();
+  hideUploadProgress();
+
+  if (btnSubmitNews) {
+    btnSubmitNews.disabled = false;
+    btnSubmitNews.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <span>Publicar Notícia</span>
+    `;
+  }
+
+  openM('create-news-modal');
+}
+
+/**
+ * Abre a modal para editar uma notícia existente
+ */
+function openEditNews(newsId) {
+  const item = localNewsStore.find(n => String(n.id) === String(newsId));
+  if (!item || !canManageNews(item)) {
+    toast('Não tem permissão para editar esta notícia.', 'error');
+    return;
+  }
+
+  hideFormAlert();
+  hideUploadProgress();
+  if (createNewsForm) createNewsForm.reset();
+  clearSelectedFile();
+
+  const editingInput = document.getElementById('news-editing-id');
+  if (editingInput) editingInput.value = item.id;
+
+  const modalTitle = document.getElementById('modal-create-title');
+  if (modalTitle) modalTitle.textContent = 'Editar Notícia';
+
+  const modalSub = document.querySelector('.admin-modal-sub');
+  if (modalSub) modalSub.textContent = 'Atualize as informações e detalhes da publicação';
+
+  if (newsTitleInput) newsTitleInput.value = item.title || '';
+  if (newsSubtitleInput) newsSubtitleInput.value = item.subtitle || item.subtitulo || '';
+  if (newsContentInput) newsContentInput.value = item.content || item.corpo || '';
+
+  const newsCategorySelect = document.getElementById('news-category-select');
+  if (newsCategorySelect) newsCategorySelect.value = item.category || 'direccao';
+
+  if (newsPinnedCheckbox) newsPinnedCheckbox.checked = item.pinned === true || item.is_pinned === true || item.fixado === true;
+
+  if (btnSubmitNews) {
+    btnSubmitNews.disabled = false;
+    btnSubmitNews.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      <span>Guardar Alterações</span>
+    `;
+  }
+
+  openM('create-news-modal');
+}
+
+/**
+ * Elimina uma notícia
+ */
+async function deleteNews(newsId) {
+  const item = localNewsStore.find(n => String(n.id) === String(newsId));
+  if (!item || !canManageNews(item)) {
+    toast('Não tem permissão para eliminar esta notícia.', 'error');
+    return;
+  }
+
+  const confirmed = await confirmModal({
+    title: 'Eliminar Notícia Institucional',
+    message: `Tem a certeza de que pretende eliminar a notícia "${item.title || ''}"? Esta ação é definitiva.`,
+    confirmText: 'Sim, Eliminar',
+    cancelText: 'Cancelar',
+    danger: true
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const { error } = await sb.from('news').delete().eq('id', newsId);
+    if (error) {
+      throw new Error(error.message || 'Erro ao eliminar notícia.');
+    }
+
+    localNewsStore = localNewsStore.filter(n => String(n.id) !== String(newsId));
+    await log('eliminar_noticia', 'news', newsId, currentProfile?.nome || '');
+    toast('Notícia eliminada com sucesso!', 'success');
+    renderNews(localNewsStore);
+  } catch (err) {
+    console.error('Erro ao eliminar notícia:', err);
+    toast(err.message || 'Falha ao eliminar notícia.', 'error');
+  }
+}
+
+/**
+ * Processo de submissão do formulário de criação/edição de notícia
+ */
 async function handleCreateNewsSubmit(e) {
   e.preventDefault();
   hideFormAlert();
 
-  // Validação estrita de perfil: apenas admin pode publicar
-  if (!currentProfile || currentProfile.role !== 'admin') {
-    showFormAlert('Operação não autorizada. Apenas administradores do IPPLN têm permissão para publicar notícias oficiais.');
+  // Validação estrita de perfil: apenas admin ou professor
+  if (!currentProfile || (currentProfile.role !== 'admin' && currentProfile.role !== 'professor')) {
+    showFormAlert('Operação não autorizada. Apenas administradores e professores têm permissão.');
     return;
+  }
+
+  const editingId = document.getElementById('news-editing-id')?.value;
+  if (editingId) {
+    const existing = localNewsStore.find(n => String(n.id) === String(editingId));
+    if (!existing || !canManageNews(existing)) {
+      showFormAlert('Acesso Negado: Não tem autorização para editar esta notícia.');
+      return;
+    }
   }
 
   const title = newsTitleInput ? newsTitleInput.value.trim() : '';
@@ -584,57 +847,99 @@ async function handleCreateNewsSubmit(e) {
     btnSubmitNews.disabled = true;
     btnSubmitNews.innerHTML = `
       <div class="spinner spinner-light" style="width: 16px; height: 16px; border-width: 2px;"></div>
-      <span>A publicar...</span>
+      <span>${editingId ? 'A guardar alterações...' : 'A publicar...'}</span>
     `;
   }
 
   try {
     let coverUrl = null;
 
-    // 1. Upload de Imagem de Capa se existir
+    // 1. Upload de Imagem de Capa se selecionada
     if (selectedCoverFile) {
       setUploadProgress(15, 'A carregar imagem de capa (0% / 15MB)...');
       coverUrl = await uploadCoverImage(selectedCoverFile);
     }
 
-    // 2. Gravação na Tabela "news"
-    setUploadProgress(85, 'A registar comunicado na base de dados oficial...');
+    const newsCategorySelect = document.getElementById('news-category-select');
+    const category = newsCategorySelect ? newsCategorySelect.value : 'direccao';
 
-    const newRecord = {
-      title: title,
-      subtitle: subtitle || null,
-      content: content,
-      cover_image_url: coverUrl || null,
-      pinned: isPinned,
-      created_at: new Date().toISOString()
-    };
+    if (editingId) {
+      // ATUALIZAÇÃO
+      setUploadProgress(70, 'A atualizar comunicado na base de dados oficial...');
 
-    // Inserção real no Supabase com validação protegida pela RLS da base de dados
-    const { data, error } = await sb
-      .from('news')
-      .insert([newRecord])
-      .select()
-      .single();
+      const updatePayload = {
+        title: title,
+        subtitle: subtitle || null,
+        content: content,
+        category: category,
+        pinned: isPinned,
+      };
+      if (coverUrl) {
+        updatePayload.cover_image_url = coverUrl;
+      }
 
-    if (error) {
-      throw new Error('Não foi possível guardar a notícia na base de dados: ' + (error.message || 'Verifique as permissões'));
+      const { data, error } = await sb
+        .from('news')
+        .update(updatePayload)
+        .eq('id', editingId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error('Não foi possível atualizar a notícia: ' + (error.message || 'Erro na base de dados'));
+      }
+
+      const idx = localNewsStore.findIndex(n => String(n.id) === String(editingId));
+      if (idx !== -1) {
+        localNewsStore[idx] = { ...localNewsStore[idx], ...updatePayload };
+      }
+
+      await log('editar_noticia', 'news', editingId, currentProfile?.nome || '');
+      toast('Notícia atualizada com sucesso!', 'success');
+      setUploadProgress(100, 'Notícia atualizada com sucesso!');
+    } else {
+      // INSERÇÃO NOVA
+      setUploadProgress(85, 'A registar comunicado na base de dados oficial...');
+
+      const newRecord = {
+        title: title,
+        subtitle: subtitle || null,
+        content: content,
+        category: category,
+        cover_image_url: coverUrl || null,
+        pinned: isPinned,
+        author_id: currentProfile.id || null,
+        author_name: currentProfile.nome || 'Autor',
+        created_at: new Date().toISOString()
+      };
+
+      const { data, error } = await sb
+        .from('news')
+        .insert([newRecord])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error('Não foi possível guardar a notícia na base de dados: ' + (error.message || 'Verifique as permissões'));
+      }
+
+      if (data) {
+        localNewsStore.unshift(data);
+        await log('publicar_noticia', 'news', data.id, currentProfile?.nome || '');
+        toast('Notícia publicada com sucesso!', 'success');
+      }
+
+      setUploadProgress(100, 'Notícia publicada com sucesso!');
     }
-
-    if (data) {
-      localNewsStore.unshift(data);
-      await log('publicar_noticia', 'news', data.id, currentProfile?.nome || '');
-      toast('Notícia publicada com sucesso!', 'success');
-    }
-
-    setUploadProgress(100, 'Notícia publicada com sucesso!');
 
     // Limpar formulário e fechar modal
     setTimeout(() => {
       if (createNewsForm) createNewsForm.reset();
+      const editingInput = document.getElementById('news-editing-id');
+      if (editingInput) editingInput.value = '';
       clearSelectedFile();
       hideUploadProgress();
-      if (createNewsModal) createNewsModal.classList.add('hidden');
-      document.body.style.overflow = '';
+      closeM('create-news-modal');
       if (btnSubmitNews) {
         btnSubmitNews.disabled = false;
         btnSubmitNews.innerHTML = `
@@ -649,56 +954,40 @@ async function handleCreateNewsSubmit(e) {
     }, 600);
 
   } catch (err) {
-    console.error('Erro ao publicar notícia:', err);
+    console.error('Erro ao guardar notícia:', err);
     hideUploadProgress();
-    showFormAlert(err.message || 'Ocorreu um erro ao publicar a notícia. Tente novamente.');
+    showFormAlert(err.message || 'Ocorreu um erro ao processar a notícia. Tente novamente.');
     if (btnSubmitNews) {
       btnSubmitNews.disabled = false;
       btnSubmitNews.innerHTML = `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
-        <span>Publicar Notícia</span>
+        <span>${editingId ? 'Guardar Alterações' : 'Publicar Notícia'}</span>
       `;
     }
   }
 }
 
 /**
- * Configurações da Modal de Criação de Notícia (Só Admin)
+ * Configurações da Modal de Criação de Notícia
  */
 function setupAdminModal() {
   if (!btnOpenCreateNews || !createNewsModal) return;
 
-  btnOpenCreateNews.addEventListener('click', () => {
-    hideFormAlert();
-    hideUploadProgress();
-    createNewsModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    if (newsTitleInput) newsTitleInput.focus();
-  });
+  btnOpenCreateNews.addEventListener('click', openCreateNews);
 
   if (btnCloseCreateNews) {
     btnCloseCreateNews.addEventListener('click', () => {
-      createNewsModal.classList.add('hidden');
-      document.body.style.overflow = '';
+      closeM('create-news-modal');
     });
   }
 
   if (btnCancelCreateNews) {
     btnCancelCreateNews.addEventListener('click', () => {
-      createNewsModal.classList.add('hidden');
-      document.body.style.overflow = '';
+      closeM('create-news-modal');
     });
   }
-
-  // Fechar ao clicar no fundo escuro
-  createNewsModal.addEventListener('click', (e) => {
-    if (e.target === createNewsModal) {
-      createNewsModal.classList.add('hidden');
-      document.body.style.overflow = '';
-    }
-  });
 
   if (createNewsForm) {
     createNewsForm.addEventListener('submit', handleCreateNewsSubmit);
@@ -805,20 +1094,22 @@ async function initNewsPage() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeNewsReader();
-      if (createNewsModal) createNewsModal.classList.add('hidden');
-      document.body.style.overflow = '';
+      closeM('create-news-modal');
     }
   });
 
-  // VISIBILIDADE DO FORMULÁRIO DE PUBLICAÇÃO: SÓ PARA ROLE === 'admin'
-  if (profile.role === 'admin') {
+  // VISIBILIDADE DO FORMULÁRIO DE PUBLICAÇÃO: ADMIN OU PROFESSOR
+  if (profile.role === 'admin' || profile.role === 'professor') {
     if (adminPublishSection) adminPublishSection.style.display = 'block';
     setupAdminModal();
   } else {
-    // Alunos e professores: não vêem o botão de publicar nem o formulário
+    // Alunos: não vêem o botão de publicar nem o formulário
     if (adminPublishSection) adminPublishSection.style.display = 'none';
     if (createNewsModal) createNewsModal.remove(); // Remove completamente do DOM por segurança
   }
+
+  // Configura filtros de categoria de notícias
+  setupNewsCategoryFilters();
 
   // Carrega as notícias
   await loadNews();

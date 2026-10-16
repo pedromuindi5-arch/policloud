@@ -1,0 +1,263 @@
+function renderFilteredFiles() {
+  if (!cloudFilesContainer) return;
+
+  const selCurso = filterCurso ? filterCurso.value : 'todos';
+  const selClasse = filterClasse ? filterClasse.value : 'todas';
+  const selTurma = filterTurma ? filterTurma.value : 'todas';
+  const selDisciplina = filterDisciplina ? filterDisciplina.value : 'todas';
+  const searchTerm = (filterSearch ? filterSearch.value : '').trim().toLowerCase();
+
+  // Aplica filtros sobre a base de dados
+  let filtered = allFilesData.filter(file => {
+    // 1. Regra de segurança do perfil Aluno
+    const isAluno = currentProfile.role === 'aluno' || currentProfile.role === 'student';
+    if (isAluno) {
+      const studentCurso = currentProfile.curso || 'Informática';
+      const studentClasse = currentProfile.classe || '10ª';
+      const studentTurma = currentProfile.turma || 'A';
+
+      if (file.curso && file.curso !== 'Geral' && file.curso !== 'todos' && file.curso !== studentCurso) {
+        return false;
+      }
+      if (file.classe && file.classe !== 'Geral' && file.classe !== 'todas' && file.classe !== studentClasse) {
+        return false;
+      }
+      if (file.turma && file.turma !== 'Geral' && file.turma !== 'todas' && file.turma !== studentTurma) {
+        return false;
+      }
+
+      // Regra NetAcad / Privacidade:
+      // Se for upload de aluno com visibilidade 'professor', só o próprio autor do ficheiro pode ver!
+      if (file.visibility === 'professor' && file.uploader_id && file.uploader_id !== (currentProfile.id || currentUser?.id)) {
+        return false;
+      }
+    }
+
+    // 2. Filtro de Curso
+    if (selCurso !== 'todos') {
+      if (file.curso && file.curso !== 'Geral' && file.curso !== selCurso) return false;
+    }
+
+    // 3. Filtro de Classe
+    if (selClasse !== 'todas') {
+      if (file.classe && file.classe !== 'Geral' && file.classe !== selClasse) return false;
+    }
+
+    // 4. Filtro de Turma
+    if (selTurma !== 'todas') {
+      if (file.turma && file.turma !== selTurma) return false;
+    }
+
+    // 5. Filtro de Disciplina
+    if (selDisciplina !== 'todas') {
+      if (file.disciplina && file.disciplina !== selDisciplina) return false;
+    }
+
+    // 6. Pesquisa por Nome
+    if (searchTerm) {
+      const fileName = (file.name || '').toLowerCase();
+      const disc = (file.disciplina || '').toLowerCase();
+      const author = (file.uploader_name || '').toLowerCase();
+      if (!fileName.includes(searchTerm) && !disc.includes(searchTerm) && !author.includes(searchTerm)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Renderiza a grelha de pastas
+  renderFolderSystem(allFilesData);
+
+  // Agrupamento por versão
+  const groupedList = groupFilesByVersion(filtered);
+
+  // Ordenação selecionada
+  const selSort = filterSort ? filterSort.value : 'recentes';
+  if (selSort === 'nome-asc') {
+    groupedList.sort((a, b) => (a.latest.name || '').localeCompare(b.latest.name || ''));
+  } else if (selSort === 'nome-desc') {
+    groupedList.sort((a, b) => (b.latest.name || '').localeCompare(a.latest.name || ''));
+  } else if (selSort === 'tamanho-desc') {
+    groupedList.sort((a, b) => (b.latest.size || 0) - (a.latest.size || 0));
+  } else if (selSort === 'tamanho-asc') {
+    groupedList.sort((a, b) => (a.latest.size || 0) - (b.latest.size || 0));
+  } else {
+    groupedList.sort((a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime());
+  }
+
+  // Actualiza contadores e indicadores
+  if (totalFilesCount) {
+    const totalFiles = filtered.length;
+    totalFilesCount.textContent = `${totalFiles} ${totalFiles === 1 ? 'ficheiro encontrado' : 'ficheiros encontrados'}`;
+  }
+
+  if (activeFilterText) {
+    const filtersUsed = [];
+    if (currentFolderState.disciplina) filtersUsed.push(`Disciplina: ${currentFolderState.disciplina}`);
+    if (selCurso !== 'todos') filtersUsed.push(`Curso: ${selCurso}`);
+    if (selClasse !== 'todas') filtersUsed.push(`Classe: ${selClasse}`);
+    if (selTurma !== 'todas') filtersUsed.push(`Turma: ${selTurma}`);
+    if (searchTerm) filtersUsed.push(`"${searchTerm}"`);
+    if (selSort && selSort !== 'recentes') {
+      const sortMap = { 'nome-asc': 'Nome A–Z', 'nome-desc': 'Nome Z–A', 'tamanho-desc': 'Maior Tamanho', 'tamanho-asc': 'Menor Tamanho' };
+      filtersUsed.push(`Ordem: ${sortMap[selSort] || selSort}`);
+    }
+
+    if (filtersUsed.length > 0) {
+      activeFilterText.textContent = `Filtros: ${filtersUsed.join(' • ')}`;
+    } else {
+      activeFilterText.textContent = currentProfile.role === 'aluno'
+        ? `A mostrar ficheiros do seu curso (${currentProfile.curso || 'Informática'}) e turma`
+        : 'A mostrar todos os ficheiros do IPPLN';
+    }
+  }
+
+  // Estado Vazio
+  if (groupedList.length === 0) {
+    cloudFilesContainer.innerHTML = `
+           <div class="state-empty" style="padding: 60px 20px; background: var(--color-surface-base); border: 2px dashed var(--color-border-subtle); border-radius: 12px; margin-top: 20px; text-align: center; display: flex; flex-direction: column; align-items: center;">
+        <div style="background: rgba(37, 99, 235, 0.05); padding: 16px; border-radius: 50%; margin-bottom: 16px;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.5">
+            <path d="M20 16V9a2 2 0 0 0-2-2H9L7 3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"></path>
+            <path d="M12 12v6"></path>
+            <path d="M9 15h6"></path>
+          </svg>
+        </div>
+        <strong style="font-size: 17px; color: var(--color-text-primary); margin-bottom: 8px;">Pasta Vazia</strong>
+        <span style="color: var(--color-text-secondary); max-width: 320px; line-height: 1.5;">Não existem documentos nesta pasta com os critérios selecionados. Se fores docente, podes fazer o upload.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const htmlArr = groupedList.map(item => {
+    const latest = item.latest;
+    const safeName = latest.nome;
+    const safeTurma = latest.turma || 'Todas';
+    const iconConfig = getFileIcon(latest.tipo);
+    const isAdmin = currentProfile?.role === 'admin';
+    const isTeacher = (currentProfile?.role === 'professor' || currentProfile?.role === 'teacher');
+    
+    return `
+      <article class="cloud-file-card-wrapper" style="display: flex; flex-direction: column;">
+        <div class="cloud-file-card">
+          <div class="cloud-file-main">
+            <div class="cloud-file-icon ${iconConfig.cssClass}">
+              ${iconConfig.svg}
+            </div>
+            <div class="cloud-file-info">
+              <div class="cloud-file-title-row">
+                <span class="cloud-file-name" title="${safeName}">${safeName}</span>
+                <span class="cloud-version-pill">v${latest.version || 1}</span>
+              </div>
+              <div class="cloud-file-meta-row">
+                <span class="cloud-meta-discipline">${latest.disciplina || 'Geral'}</span>
+                <span>Turma ${safeTurma}</span>
+                <span>•</span>
+                <span>${formatFileSize(latest.size)}</span>
+                <span>•</span>
+                <span>${formatDateDisplay(latest.created_at)}</span>
+                <span>•</span>
+                <span>Por: ${latest.uploader_name || 'Docente'}</span>
+              </div>
+            </div>
+          </div>
+          <div class="cloud-file-actions">
+            ${(isAdmin || (isTeacher && latest.uploader_id === currentProfile?.id)) ? `
+            <button type="button" class="btn-delete-file" data-file-id="${latest.id}" data-file-url="${latest.file_url}" data-file-name="${safeName}" style="background: transparent; color: var(--color-danger); border: 1px solid var(--color-danger); margin-right: 8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              <span>Apagar</span>
+            </button>` : ''}
+            <button type="button" class="btn-download-file" data-file-id="${latest.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Descarregar</span>
+            </button>
+          </div>
+        </div>
+      </article>
+    `;
+  });
+  
+  cloudFilesContainer.innerHTML = htmlArr.join('');
+
+
+  // Eventos de Apagar Ficheiro
+  cloudFilesContainer.querySelectorAll('.btn-delete-file').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fileId = btn.getAttribute('data-file-id');
+      const fileUrl = btn.getAttribute('data-file-url');
+      const fileName = btn.getAttribute('data-file-name');
+      handleFileDelete(fileId, fileUrl, fileName);
+    });
+  });
+
+  // Eventos de Download
+  cloudFilesContainer.querySelectorAll('.btn-download-file, .btn-version-download').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fileId = btn.getAttribute('data-file-id');
+      handleSecureDownload(fileId);
+    });
+  });
+
+  // Acordeões de histórico
+  cloudFilesContainer.querySelectorAll('.cloud-version-history-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.getAttribute('data-target-drawer'));
+      if(target) target.style.display = target.style.display === 'none' ? 'flex' : 'none';
+    });
+  });
+}
+
+async function handleFileDelete(fileId, storagePath, fileName) {
+  if (!confirm('Tem a certeza absoluta que deseja eliminar o ficheiro "' + fileName + '"? Esta ação não pode ser desfeita.')) {
+    return;
+  }
+  try {
+    toast('A apagar ficheiro...', 'info');
+    if (storagePath) {
+      await sb.storage.from('policloud').remove([storagePath]);
+    }
+    const { error: dbError } = await sb.from('files').delete().eq('id', fileId);
+    if (dbError) throw dbError;
+    toast('Ficheiro eliminado com sucesso.', 'success');
+    await log('REMOCAO_FICHEIRO', 'Ficheiro removido: ' + fileName);
+    await fetchAllFiles();
+  } catch (err) {
+    console.error(err);
+    toast('Ocorreu um erro.', 'error');
+  }
+}
+
+async function handleSecureDownload(fileId) {
+  const targetFile = allFilesData.find(f => f.id === fileId);
+  if (!targetFile) return;
+  toast('A preparar download seguro...', 'info');
+  try {
+    const { data, error } = await sb.storage.from('policloud').createSignedUrl(targetFile.file_url, 60, {
+      download: true
+    });
+    if (error) throw error;
+    
+    // Atualizar visualizações
+    const currentViews = targetFile.views || 0;
+    await sb.from('files').update({ views: currentViews + 1 }).eq('id', fileId);
+    
+    await log('download_ficheiro', 'files', fileId, currentProfile?.nome);
+    
+    window.location.href = data.signedUrl;
+  } catch (err) {
+    console.error(err);
+    toast('Erro ao descarregar ficheiro.', 'error');
+  }
+}
+

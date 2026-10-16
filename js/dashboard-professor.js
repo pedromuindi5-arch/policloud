@@ -2,6 +2,8 @@
 // Lógica do Dashboard do Professor (dashboard-professor.html)
 
 import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { checkNewMessagePushForTeacher,
+  initRealtimeMessages, dismissPushNotification, markMessagesAsReadForUser } from './messages-service.js';
 import './theme.js';
 
 // Elementos do DOM
@@ -76,31 +78,34 @@ function updateShortcutLinks(selectedTurma) {
 /**
  * Carrega a lista de turmas para o seletor a partir dos arrays padrão e registos da base de dados
  */
-async function loadTurmasList() {
+async function loadTurmasList(profile = null) {
   if (!turmaSelect) return;
 
-  const turmasSet = new Set(TURMAS);
+  const teacherAssignedTurmas = profile && profile.turmas && profile.turmas.length > 0 ? profile.turmas : null;
+  const turmasSet = new Set(teacherAssignedTurmas ? teacherAssignedTurmas : TURMAS);
 
-  try {
-    const { data: profiles, error } = await sb
-      .from('profiles')
-      .select('turma')
-      .not('turma', 'is', null);
+  if (!teacherAssignedTurmas) {
+    try {
+      const { data: profiles, error } = await sb
+        .from('profiles')
+        .select('turma')
+        .not('turma', 'is', null);
 
-    if (!error && profiles) {
-      profiles.forEach(p => {
-        if (p.turma && p.turma.trim()) {
-          turmasSet.add(p.turma.trim());
-        }
-      });
+      if (!error && profiles) {
+        profiles.forEach(p => {
+          if (p.turma && p.turma.trim()) {
+            turmasSet.add(p.turma.trim());
+          }
+        });
+      }
+    } catch (err) {
+      // Mantém conjunto padrão
     }
-  } catch (err) {
-    // Mantém conjunto padrão
   }
 
   const sortedTurmas = Array.from(turmasSet).sort();
   turmaSelect.innerHTML = `
-    <option value="todas">Todas as Turmas (Acesso Geral)</option>
+    <option value="todas">Todas as Minhas Turmas</option>
     ${sortedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
   `;
 }
@@ -368,7 +373,7 @@ async function initTeacherDashboard() {
   }
 
   // Carregar turmas
-  await loadTurmasList();
+  await loadTurmasList(profile);
 
   // Ouvir mudança de turma no selector
   if (turmaSelect) {
@@ -384,7 +389,97 @@ async function initTeacherDashboard() {
   if (sessionOverlay) {
     sessionOverlay.classList.add('hidden');
   }
+
+  // Verificação de Notificação Push de Nova Mensagem
+  await checkAndShowPushNotification(profile);
+
+  // Ouvir mensagens em tempo real enquanto o professor está no painel
+  window.addEventListener('policloud_chat_updated', async () => {
+    await checkAndShowPushNotification(profile);
+  });
 }
 
+/**
+ * Verifica mensagens de alunos e apresenta modal PUSH "NOVAS MENSAGENS"
+ */
+async function checkAndShowPushNotification(profile) {
+  try {
+    const unreadPush = await checkNewMessagePushForTeacher(profile);
+    const badge = document.getElementById('sidebar-unread-badge');
+
+    if (unreadPush && unreadPush.count > 0) {
+      if (badge) badge.classList.remove('hidden');
+
+      const pushModal = document.getElementById('push-message-modal');
+      const pushAvatar = document.getElementById('push-sender-avatar');
+      const pushName = document.getElementById('push-sender-name');
+      const pushMeta = document.getElementById('push-sender-meta');
+      const pushPreview = document.getElementById('push-message-preview');
+      const btnOpenChat = document.getElementById('btn-open-push-chat');
+      const btnCloseModal = document.getElementById('btn-close-push-modal');
+
+      if (pushModal && pushName && pushPreview) {
+        if (unreadPush.count === 1) {
+          // Apenas uma mensagem
+          const msg = unreadPush.latestMessage;
+          if (pushAvatar) pushAvatar.textContent = initials(msg.sender_name);
+          pushName.textContent = msg.sender_name || 'Aluno';
+          if (pushMeta) {
+            pushMeta.textContent = `Turma ${msg.turma || 'Geral'} • ${formatTimeRelative(msg.created_at)}`;
+          }
+          pushPreview.textContent = `"${msg.text}"`;
+        } else {
+          // Múltiplas mensagens
+          if (pushAvatar) pushAvatar.textContent = '📬';
+          pushName.textContent = `${unreadPush.count} Novas Mensagens`;
+          if (pushMeta) {
+            pushMeta.textContent = `De ${unreadPush.studentsCount} aluno(s)`;
+          }
+          pushPreview.textContent = `Pressione "Ler Mensagens" para ver as suas mensagens não lidas no chat.`;
+        }
+
+        if (btnOpenChat) {
+          // Se for só uma, abre direto na conversa. Se forem várias, abre a janela principal de chat.
+          const targetUrl = unreadPush.count === 1 
+            ? `/mensagens.html?chat=${encodeURIComponent(unreadPush.latestMessage.conversation_id)}` 
+            : `/mensagens.html`;
+            
+          btnOpenChat.href = targetUrl;
+          btnOpenChat.onclick = () => {
+            dismissPushNotification(unreadPush.idsToDismiss);
+            if (profile?.id) markMessagesAsReadForUser(profile.id, unreadPush.idsToDismiss);
+            if (badge) badge.classList.add('hidden');
+          };
+        }
+
+        if (btnCloseModal) {
+          btnCloseModal.onclick = () => {
+            dismissPushNotification(unreadPush.idsToDismiss);
+            if (profile?.id) markMessagesAsReadForUser(profile.id, unreadPush.idsToDismiss);
+            closeM('push-message-modal');
+            if (badge) badge.classList.add('hidden');
+          };
+        }
+
+        // Abre o modal após pequeno delay para entrada suave
+        setTimeout(() => {
+          openM('push-message-modal');
+        }, 600);
+      }
+    } else {
+      if (badge) badge.classList.add('hidden');
+    }
+  } catch (e) {
+    console.warn('Erro ao verificar push notification:', e);
+  }
+}
+
+// Atualizar verificação quando a janela recebe foco (ex: volta do chat)
+window.addEventListener('focus', async () => {
+  const profile = await getProfile();
+  if (profile) await checkAndShowPushNotification(profile);
+});
+
 initTeacherDashboard();
+
 

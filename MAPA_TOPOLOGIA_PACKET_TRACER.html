@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa da Topologia PoliCloud - Cisco Packet Tracer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, sans-serif; }
+  body { background: #0F172A; color: #F8FAFC; padding: 30px; }
+  h1 { text-align: center; font-size: 26px; color: #38BDF8; margin-bottom: 8px; }
+  p.subtitle { text-align: center; font-size: 14px; color: #94A3B8; margin-bottom: 30px; }
+  
+  .canvas {
+    display: grid;
+    grid-template-columns: 2.2fr 1.3fr;
+    gap: 25px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+  
+  .section-box {
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .campus-box { background: rgba(30, 41, 59, 0.7); border-color: #38BDF8; }
+  .internet-box { background: rgba(30, 41, 59, 0.7); border-color: #F59E0B; }
+  
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .node {
+    background: #1E293B;
+    border: 1px solid #475569;
+    border-radius: 12px;
+    padding: 12px 16px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  
+  .node-icon { font-size: 24px; margin-bottom: 4px; }
+  .node-name { font-weight: 700; font-size: 14px; color: #FFFFFF; }
+  .node-sub { font-size: 11px; color: #94A3B8; }
+  .node-ip { font-family: monospace; font-size: 11.5px; color: #38BDF8; margin-top: 4px; }
+  
+  .wire-badge {
+    display: inline-block;
+    background: #0284C7;
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin: 4px 2px 0;
+  }
+  
+  .zones-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 25px;
+  }
+  
+  .zone-card {
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .zone-alunos { background: rgba(37, 99, 235, 0.15); border: 1px solid #2563EB; }
+  .zone-profs { background: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; }
+  .zone-admin { background: rgba(168, 85, 247, 0.15); border: 1px solid #A855F7; }
+  .zone-dmz { background: rgba(239, 68, 68, 0.15); border: 1px solid #EF4444; }
+  
+  .zone-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; }
+  .tag-blue { color: #60A5FA; }
+  .tag-green { color: #34D399; }
+  .tag-purple { color: #C084FC; }
+  .tag-red { color: #F87171; }
+  
+  .link-arrow {
+    text-align: center;
+    color: #64748B;
+    font-size: 18px;
+    margin: 8px 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>🗺️ Arquitetura Visual do Cisco Packet Tracer</h1>
+<p class="subtitle">Projeto Final CCNA — PoliCloud (Infraestrutura de Rede Completa)</p>
+
+<div class="canvas">
+
+  <!-- LADO ESQUERDO: ESCOLA IPPLN -->
+  <div class="section-box campus-box">
+    <div class="section-title" style="color: #38BDF8;">
+      🏫 Campus Escolar IPPLN (Rede Local & DMZ)
+    </div>
+
+    <!-- TOPO: CORE E BORDA -->
+    <div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 25px;">
+      
+      <div class="node" style="border-color: #38BDF8; width: 260px;">
+        <div class="node-icon">⚡</div>
+        <div class="node-name">SW-CORE</div>
+        <div class="node-sub">Switch Multilayer 3560 (Camada 3)</div>
+        <div class="node-ip">SVIs: 192.168.10.1 a 50.1</div>
+        <div>
+          <span class="wire-badge">Gig0/1 ➔ R1</span>
+        </div>
+      </div>
+
+      <div style="font-weight: 700; color: #38BDF8; font-size: 13px; text-align: center;">
+        Link Ponto-a-Ponto<br>
+        <span style="font-family: monospace; font-size: 11px; color: #94A3B8;">10.0.0.0/30</span><br>
+        ➔
+      </div>
+
+      <div class="node" style="border-color: #F43F5E; width: 240px;">
+        <div class="node-icon">🛡️</div>
+        <div class="node-name">R1</div>
+        <div class="node-sub">Router Cisco 2911 (Borda)</div>
+        <div class="node-ip">LAN: 10.0.0.1 | WAN: 200.10.10.2</div>
+        <div>
+          <span class="wire-badge" style="background: #E11D48;">Gig0/1 ➔ ISP</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="link-arrow">▼ Cabos Descendentes (Trunks e Servidores) ▼</div>
+
+    <!-- CAMADA DE ACESSO E SERVIDORES -->
+    <div class="zones-grid">
+
+      <!-- ZONA ALUNOS -->
+      <div class="zone-card zone-alunos">
+        <span class="zone-tag tag-blue">VLAN 10: Alunos</span>
+        <div class="node">
+          <div class="node-icon">🔀</div>
+          <div class="node-name">SW-ALUNOS</div>
+          <div class="node-sub">Switch 2960</div>
+          <span class="wire-badge">Gig0/1 ➔ Core Fa0/1</span>
+        </div>
+        <div class="node">
+          <div class="node-icon">💻</div>
+          <div class="node-name">PCs Alunos</div>
+          <div class="node-ip">DHCP: 192.168.10.X</div>
+        </div>
+      </div>
+
+      <!-- ZONA PROFESSORES -->
+      <div class="zone-card zone-profs">
+        <span class="zone-tag tag-green">VLAN 20: Professores</span>
+        <div class="node">
+          <div class="node-icon">🔀</div>
+          <div class="node-name">SW-PROFS</div>
+          <div class="node-sub">Switch 2960</div>
+          <span class="wire-badge">Gig0/1 ➔ Core Fa0/2</span>
+        </div>
+        <div class="node">
+          <div class="node-icon">💻</div>
+          <div class="node-name">PC-Professor</div>
+          <div class="node-ip">DHCP: 192.168.20.X</div>
+        </div>
+      </div>
+
+      <!-- ZONA ADMIN -->
+      <div class="zone-card zone-admin">
+        <span class="zone-tag tag-purple">VLAN 50: Secretaria</span>
+        <div class="node">
+          <div class="node-icon">🔀</div>
+          <div class="node-name">SW-ADMIN</div>
+          <div class="node-sub">Switch 2960</div>
+          <span class="wire-badge">Gig0/1 ➔ Core Fa0/3</span>
+        </div>
+        <div class="node">
+          <div class="node-icon">🖥️</div>
+          <div class="node-name">PC-Admin</div>
+          <div class="node-ip">192.168.50.10</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ZONA DMZ SERVIDORES -->
+    <div class="zone-card zone-dmz" style="margin-top: 15px;">
+      <span class="zone-tag tag-red">VLAN 30 (DMZ) & VLAN 40 (Gestão / SDN)</span>
+      <div style="display: flex; gap: 15px;">
+        <div class="node" style="flex: 1;">
+          <div class="node-icon">🖥️</div>
+          <div class="node-name">SRV-PoliCloud</div>
+          <div class="node-sub">Servidor Web PoliCloud (DMZ)</div>
+          <div class="node-ip">192.168.30.10</div>
+          <span class="wire-badge" style="background:#DC2626;">Fa0 ➔ Core Fa0/10</span>
+        </div>
+        <div class="node" style="flex: 1;">
+          <div class="node-icon">📊</div>
+          <div class="node-name">SRV-Controller</div>
+          <div class="node-sub">Network Controller (SDN)</div>
+          <div class="node-ip">192.168.40.10</div>
+          <span class="wire-badge" style="background:#D97706;">Fa0 ➔ Core Fa0/20</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LADO DIREITO: INTERNET / FORA DA ESCOLA -->
+  <div class="section-box internet-box">
+    <div class="section-title" style="color: #F59E0B;">
+      🌍 Internet Pública (Acesso Remoto)
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+      
+      <div class="node" style="border-color: #F59E0B;">
+        <div class="node-icon">🌐</div>
+        <div class="node-name">R-ISP</div>
+        <div class="node-sub">Router Cisco 2911 (Operadora)</div>
+        <div class="node-ip">WAN: 200.10.10.1 | LAN: 187.50.20.1</div>
+      </div>
+
+      <div class="link-arrow">▼ Cabo Gigabit (Gig0/1 ➔ Gig0/1) ▼</div>
+
+      <div class="node" style="border-color: #F59E0B;">
+        <div class="node-icon">🔀</div>
+        <div class="node-name">SW-ISP</div>
+        <div class="node-sub">Switch 2960 da Internet</div>
+      </div>
+
+      <div class="link-arrow">▼ Dispositivos em Casa / DNS ▼</div>
+
+      <div class="node" style="background: rgba(245, 158, 11, 0.1); border-color: #F59E0B;">
+        <div class="node-icon">📡</div>
+        <div class="node-name">SRV-DNS-ISP</div>
+        <div class="node-sub">policloud.ippln.ao ➔ 200.10.10.2</div>
+        <div class="node-ip">187.50.20.10 (Porta Fa0/1)</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+        <div class="node">
+          <div class="node-name">💻 PC-Aluno-Casa</div>
+          <div class="node-ip">187.50.20.50 (Porta Fa0/2)</div>
+        </div>
+        <div class="node">
+          <div class="node-name">💻 PC-Professor-Casa</div>
+          <div class="node-ip">187.50.20.60 (Porta Fa0/3)</div>
+        </div>
+        <div class="node">
+          <div class="node-name">💻 PC-Admin-Casa</div>
+          <div class="node-ip">187.50.20.70 (Porta Fa0/4)</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

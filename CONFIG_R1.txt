@@ -1,0 +1,47 @@
+enable
+configure terminal
+hostname R1
+
+interface gig0/0
+ description Conexao ao SW-CORE
+ ip address 10.0.0.1 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+
+interface gig0/1
+ description Conexao WAN ao ISP
+ ip address 200.10.10.2 255.255.255.252
+ ip nat outside
+ no shutdown
+exit
+
+ip route 192.168.10.0 255.255.255.0 10.0.0.2
+ip route 192.168.20.0 255.255.255.0 10.0.0.2
+ip route 192.168.30.0 255.255.255.0 10.0.0.2
+ip route 192.168.40.0 255.255.255.0 10.0.0.2
+ip route 192.168.50.0 255.255.255.0 10.0.0.2
+
+ip route 0.0.0.0 0.0.0.0 200.10.10.1
+
+ip nat inside source static tcp 192.168.30.10 80 200.10.10.2 80
+ip nat inside source static tcp 192.168.30.10 443 200.10.10.2 443
+
+access-list 1 permit 192.168.10.0 0.0.0.255
+access-list 1 permit 192.168.20.0 0.0.0.255
+access-list 1 permit 192.168.50.0 0.0.0.255
+ip nat inside source list 1 interface gig0/1 overload
+
+ip access-list extended WAN-FIREWALL
+ permit tcp any host 192.168.30.10 eq 80
+ permit tcp any host 192.168.30.10 eq 443
+ permit tcp any any established
+ permit icmp any any echo-reply
+ deny ip any any
+exit
+
+interface gig0/1
+ ip access-group WAN-FIREWALL in
+exit
+end
+write memory

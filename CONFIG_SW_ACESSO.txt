@@ -1,0 +1,73 @@
+=======================================================
+1. NO SWITCH: SW-ALUNOS
+=======================================================
+enable
+configure terminal
+hostname SW-ALUNOS
+vlan 10
+ name ALUNOS
+exit
+interface range fa0/1-24
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ no shutdown
+exit
+interface gig0/1
+ switchport mode trunk
+ no shutdown
+exit
+end
+write memory
+
+
+=======================================================
+2. NO SWITCH: SW-PROFS
+=======================================================
+enable
+configure terminal
+hostname SW-PROFS
+vlan 20
+ name PROFESSORES
+exit
+interface range fa0/1-24
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ no shutdown
+exit
+interface gig0/1
+ switchport mode trunk
+ no shutdown
+exit
+end
+write memory
+
+
+=======================================================
+3. NO SWITCH: SW-ADMIN
+=======================================================
+enable
+configure terminal
+hostname SW-ADMIN
+vlan 50
+ name ADMINISTRACAO
+exit
+interface range fa0/1-24
+ switchport mode access
+ switchport access vlan 50
+ spanning-tree portfast
+ no shutdown
+exit
+interface gig0/1
+ switchport mode trunk
+ no shutdown
+exit
+end
+write memory

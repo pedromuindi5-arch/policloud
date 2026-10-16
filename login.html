@@ -35,17 +35,16 @@
       <section class="auth-left-section">
         <!-- Brand Header Top-Left -->
          <header class="auth-brand-header">
-  <div class="auth-brand-logo-mark" aria-hidden="true">
-    <img
-      src="/assets/logotipo_white.svg"
-      alt=""
-      class="auth-brand-logo-img"
-      width="24"
-      height="24"
-    />
-  </div>
-
-</header>
+           <div class="auth-brand-logo-mark" aria-hidden="true">
+             <img
+               src="./assets/logotipo_white.svg"
+               alt="PoliCloud IPPLN"
+               class="auth-brand-logo-img"
+               width="38"
+               height="38"
+             />
+           </div>
+         </header>
 
         <div class="auth-form-container">
           <!-- Títulos de Boas-Vindas -->
@@ -115,13 +114,13 @@
                 <input type="checkbox" name="remember" class="auth-checkbox" checked />
                 <span>Lembrar-me</span>
               </label>
-              <a href="#" class="auth-forgot-link" onclick="alert('Por razões de segurança, a recuperação de palavra-passe é gerida presencialmente na secretaria académica do IPPLN.'); return false;">Esqueceu a Palavra-passe?</a>
+              <button type="button" class="auth-forgot-link" onclick="alert('Por razões de segurança, a recuperação de palavra-passe é gerida presencialmente na secretaria académica do IPPLN.');">Esqueceu a Palavra-passe?</button>
             </div>
 
             <!-- Botão de Entrar (Royal Blue Button) -->
             <button type="submit" id="submit-btn" class="btn-auth-royal-blue">
               <span id="btn-spinner" class="spinner spinner-light" style="display: none;" aria-hidden="true"></span>
-              <span id="btn-text">Log In</span>
+              <span id="btn-text">Entrar na Intranet</span>
             </button>
           </form>
 
@@ -152,8 +151,8 @@
 
         <!-- Rodapé do Lado Esquerdo -->
         <footer class="auth-left-footer">
-          <p>Copyright © 2026 PoliCloud Enterprises LTD.</p>
-          <a href="#" onclick="alert('Instituto Politécnico Pascoal Luvualu do Namibe - Termos & Privacidade'); return false;" class="auth-privacy-link">Política de Privacidade</a>
+          <p>Copyright © 2026 PoliCloud IPPLN.</p>
+          <button type="button" onclick="alert('Instituto Politécnico Pascoal Luvualu do Namibe - Termos & Privacidade');" class="auth-privacy-link">Política de Privacidade</button>
         </footer>
       </section>
 
