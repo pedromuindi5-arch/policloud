@@ -2496,24 +2496,39 @@ button {
    ========================================================================== */
 
 @media (max-width: 1024px) {
-  .app-sidebar {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .app-sidebar,
+  .sidebar-light,
+  .sidebar-dark {
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
+    z-index: 1005;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
   }
 
-  .app-sidebar.mobile-open {
+  .app-sidebar.mobile-open,
+  .app-sidebar.open,
+  .sidebar-light.mobile-open,
+  .sidebar-light.open,
+  .sidebar-dark.mobile-open,
+  .sidebar-dark.open {
     transform: translateX(0);
   }
 
   .app-topbar {
     display: flex;
+    width: 100%;
+    flex-shrink: 0;
   }
 
   .app-main {
+    width: 100%;
     padding: 24px 20px;
   }
 }
@@ -2527,8 +2542,9 @@ button {
     padding: 24px 20px;
   }
 
-  .btn-primary, .btn-secondary, .btn-cloud-upload {
+  .btn-cloud-upload {
     width: 100%;
+    justify-content: center;
   }
 }
 
@@ -3361,24 +3377,39 @@ button {
    ========================================================================== */
 
 @media (max-width: 1024px) {
-  .app-sidebar {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .app-sidebar,
+  .sidebar-light,
+  .sidebar-dark {
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
+    z-index: 1005;
     transform: translateX(-100%);
     box-shadow: var(--apple-shadow-lg);
   }
 
-  .app-sidebar.mobile-open {
+  .app-sidebar.mobile-open,
+  .app-sidebar.open,
+  .sidebar-light.mobile-open,
+  .sidebar-light.open,
+  .sidebar-dark.mobile-open,
+  .sidebar-dark.open {
     transform: translateX(0);
   }
 
   .app-topbar {
     display: flex;
+    width: 100%;
+    flex-shrink: 0;
   }
 
   .app-main {
+    width: 100%;
     padding: 24px 20px;
   }
 
@@ -3417,8 +3448,9 @@ button {
     width: 100%;
   }
 
-  .btn-primary, .btn-secondary, .btn-cloud-upload {
+  .btn-cloud-upload {
     width: 100%;
+    justify-content: center;
   }
 }
 
@@ -6294,3 +6326,717 @@ button {
 .chat-bubble-received {
   border-bottom-left-radius: 4px !important;
 }
+
+/* ==========================================================================
+   17. SISTEMA COMPLETO DE RESPONSIVIDADE (TABLETS & TELEMÓVEIS)
+   ========================================================================== */
+
+/* Garantir que tabelas administrativas tenham sempre scroll horizontal suave */
+.admin-table-responsive,
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Evitar overflow horizontal acidental no body e contentores flex/grid */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-main,
+.app-container,
+.dashboard-columns > *,
+.dashboard-grid-2col > *,
+.dashboard-dual-grid > *,
+.mural-layout-grid > *,
+.news-grid > * {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   TABLETS E ECRÃS MÉDIOS (<= 1024px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  /* Estrutura Base: Topbar em cima, Conteúdo em baixo (Coluna) */
+  .app-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    width: 100%;
+  }
+
+  .app-topbar {
+    display: flex !important;
+    width: 100%;
+    height: 60px;
+    flex-shrink: 0;
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  .topbar-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  /* Gaveta Lateral (Sidebar Off-Canvas) acima do overlay */
+  .app-sidebar,
+  .sidebar-light,
+  .sidebar-dark {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100dvh;
+    z-index: 1005 !important;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  }
+
+  .app-sidebar.mobile-open,
+  .app-sidebar.open,
+  .sidebar-light.mobile-open,
+  .sidebar-light.open,
+  .sidebar-dark.mobile-open,
+  .sidebar-dark.open {
+    transform: translateX(0) !important;
+  }
+
+  #sidebarOverlay,
+  .sidebar-overlay {
+    z-index: 1000 !important;
+  }
+
+  /* Mostrar overlay automaticamente quando #app-sidebar tem .mobile-open (ex: Admin) */
+  .app-layout:has(.app-sidebar.mobile-open) #sidebarOverlay,
+  .app-layout:has(.app-sidebar.open) #sidebarOverlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-main {
+    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    padding: 22px 18px 36px;
+  }
+
+  /* Admin Stats Grid em Tablet: 2 colunas equilibradas */
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  /* Dashboards Aluno e Professor: Heróis e Grelhas */
+  .student-hero-body,
+  .teacher-hero-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .student-stats-group,
+  .teacher-stats-box {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-columns,
+  .dashboard-grid-2col,
+  .dashboard-dual-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* Mensagens / Chat em Tablet (769px - 1024px) */
+  .chat-page-main {
+    height: calc(100dvh - 60px) !important;
+    padding: 14px !important;
+    overflow: hidden;
+  }
+
+  .chat-sidebar {
+    width: 270px;
+    min-width: 240px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TABLETS PEQUENOS E TELEMÓVEIS GRANDES (<= 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* Login Split Screen */
+  .auth-split-viewport {
+    min-height: 100dvh;
+    height: auto;
+  }
+
+  .auth-left-section {
+    padding: 28px 20px;
+    min-height: 100dvh;
+  }
+
+  /* Cabeçalhos de Secção e Barras de Ferramentas Admin */
+  .admin-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .admin-header-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .admin-header-actions > button,
+  .admin-header-actions > a {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .admin-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .admin-search-wrapper,
+  .admin-filter-wrapper {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  #view-disciplinas-table > div:first-child {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Mural & Calendário: Cabeçalho e Controlos */
+  .mural-header-card {
+    padding: 22px 18px;
+  }
+
+  .mural-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .mural-header-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .turma-selector-box {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .turma-selector-box select,
+  .turma-selector-box .custom-select-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .teacher-actions-group {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .teacher-actions-group > button {
+    flex: 1 1 calc(50% - 5px);
+    justify-content: center;
+  }
+
+  /* Notícias: Controlos e Pesquisa */
+  .news-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .news-controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .news-categories-pills {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .news-categories-pills .category-pill {
+    flex-shrink: 0;
+  }
+
+  .news-search-box {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* Cloud: Cabeçalho, Filtros e Breadcrumbs */
+  .cloud-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .cloud-filters-meta-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cloud-search-wrapper {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cloud-breadcrumb-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .cloud-active-folder-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  /* Mensagens / Chat em Telemóveis e Tablets Vertical (<= 768px) */
+  .chat-page-main {
+    height: auto !important;
+    min-height: calc(100dvh - 60px);
+    padding: 10px !important;
+    overflow-y: auto !important;
+  }
+
+  .chat-container-card {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: calc(100dvh - 82px);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .chat-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    max-height: 230px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--color-border-subtle);
+    flex-shrink: 0;
+  }
+
+  .chat-sidebar-header {
+    padding: 12px 14px;
+  }
+
+  .chat-contacts-list {
+    max-height: 155px;
+    overflow-y: auto;
+  }
+
+  .chat-window {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1;
+    min-height: 420px;
+    height: calc(100dvh - 320px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-window-header {
+    padding: 12px 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .chat-messages-area {
+    padding: 14px 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .chat-message-row {
+    max-width: 90%;
+  }
+
+  .chat-composer {
+    padding: 10px 12px !important;
+  }
+
+  .chat-composer-form {
+    gap: 8px;
+  }
+
+  /* Paginação de Tabelas Admin */
+  .admin-table-pagination {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TELEMÓVEIS (<= 640px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .app-main {
+    padding: 14px 12px 32px;
+  }
+
+  /* Cartões de Topo (Hero Cards) */
+  .student-hero-card,
+  .teacher-hero-card,
+  .news-header-card,
+  .admin-header-card,
+  .cloud-header-card,
+  .mural-header-card {
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+
+  .student-name,
+  .teacher-name,
+  .page-title {
+    font-size: 22px !important;
+    line-height: 1.25;
+  }
+
+  /* Estatísticas Admin e Dashboards */
+  .admin-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .student-stats-group,
+  .teacher-stats-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .student-stat-item,
+  .teacher-stat-pill {
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .student-academic-pills {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Banner de Notificação do Aluno */
+  .student-notification-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .student-notification-banner .btn-notification-action {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Selector de Turma no Dashboard do Professor */
+  .turma-selector-card {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+    padding: 16px !important;
+  }
+
+  .turma-selector-card .custom-select-wrapper,
+  .turma-selector-card select {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Grelha de Acções Rápidas */
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .action-row-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  /* Cloud: Pastas e Cartões de Ficheiros */
+  .cloud-folders-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cloud-file-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .cloud-file-main {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .cloud-file-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .cloud-file-title {
+    word-break: break-word;
+  }
+
+  .cloud-file-meta {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+
+  .cloud-file-actions {
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border-subtle);
+    gap: 8px;
+  }
+
+  .cloud-file-actions .cloud-action-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Mural & Calendário: Separadores (Tabs), Eventos e Publicações */
+  .mural-nav-tabs {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .mural-tab-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13.5px;
+  }
+
+  .teacher-actions-group {
+    flex-direction: column;
+  }
+
+  .teacher-actions-group > button {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .dark-event-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .mural-post-card {
+    padding: 18px 16px;
+  }
+
+  .mural-post-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .mural-comment-form {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .mural-comment-form button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Notícias: Grelha e Destaque */
+  .news-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .pinned-news-content {
+    padding: 20px 16px;
+  }
+
+  .pinned-news-title {
+    font-size: 20px;
+  }
+
+  /* Admin: Grelha de Cursos e Tabs */
+  #cursos-cards-container {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-course-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-course-tab {
+    flex-shrink: 0;
+  }
+
+  /* Modais (Admin, Cloud, Mural, Notícias, Perfil) */
+  .admin-modal-backdrop,
+  .modal-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .admin-modal-card,
+  .modal-card,
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92dvh;
+    border-radius: 20px;
+    margin: 0;
+  }
+
+  .admin-modal-header,
+  .modal-header {
+    padding: 16px 18px;
+  }
+
+  .admin-modal-body,
+  .modal-body {
+    padding: 18px;
+    max-height: calc(92dvh - 140px);
+    overflow-y: auto;
+  }
+
+  .admin-modal-footer,
+  .modal-footer {
+    padding: 14px 18px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-modal-footer > button,
+  .modal-footer > button {
+    width: 100%;
+    justify-content: center;
+    margin: 0 !important;
+  }
+
+  .form-row-2col,
+  .modal-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  /* Login (auth) em ecrãs pequenos */
+  .auth-form-container {
+    max-width: 100%;
+  }
+
+  .auth-options-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .auth-sso-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .auth-footer-minimal {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  /* Notificações Toast em Telemóveis */
+  .toast-container {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .toast {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 14px;
+    font-size: 13.5px;
+  }
+
+  /* Anexos de Imagem no Chat */
+  .chat-image-preview-attachment {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ECRÃS MUITO COMPACTOS (<= 400px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 400px) {
+  .student-stats-group,
+  .teacher-stats-box {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-title {
+    font-size: 13.5px;
+  }
+
+  .app-main {
+    padding: 12px 10px 28px;
+  }
+}
+
