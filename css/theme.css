@@ -1,0 +1,276 @@
+/**
+ * PoliCloud — Theme & Design System Tokens
+ * Conforme diretrizes: .agents/skills/impeccable.md & .agents/skills/frontend-design.md
+ * - Escala estrita em múltiplos de 4px / 8px
+ * - Rigor geométrico (raios de 4px a 8px, sem cantos exagerados de IA)
+ * - Sombras ultra suaves com bordas de 1px (sem manchas escuras)
+ * - Hierarquia tipográfica com valores inteiros
+ * - Estados interativos obrigatórios (:hover, :focus-visible, :active)
+ */
+
+:root,
+[data-theme="light"],
+body.theme-light {
+  /* ========================================================================
+     1. TIPOGRAFIA DO SISTEMA
+     ======================================================================== */
+  --font-family-base: system-ui, -apple-system, "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family-heading: system-ui, -apple-system, "SF Pro Display", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Escala tipográfica estrita (valores inteiros) */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.45;
+  --line-height-relaxed: 1.6;
+
+  /* ========================================================================
+     2. ESPAÇAMENTOS MATEMÁTICOS (Múltiplos de 4px / 8px)
+     ======================================================================== */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ========================================================================
+     3. RAIO DE BORDA (Rigor de 4px a 8px — Sem exageros de IA)
+     ======================================================================== */
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-card: 8px;
+  --radius-modal: 10px;
+  --radius-full: 9999px;
+
+  /* ========================================================================
+     4. CORES & SUPERFÍCIES INSTITUCIONAIS (MODO CLARO)
+     ======================================================================== */
+  --color-bg-canvas: #F5F5F7;
+  --color-surface-base: #FFFFFF;
+  --color-surface-subtle: #FAFAFB;
+  --color-surface-secondary: #F0F0F2;
+  --color-surface-tertiary: #E5E5EA;
+  --color-surface-hover: rgba(0, 0, 0, 0.035);
+  --color-surface-active: rgba(0, 0, 0, 0.07);
+
+  --color-text-primary: #1D1D1F;
+  --color-text-secondary: #6E6E73;
+  --color-text-tertiary: #86868B;
+  --color-text-inverse: #FFFFFF;
+
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+
+  /* Cor de Destaque Institucional: Azul Apple (#0071E3) */
+  --color-accent: #0071E3;
+  --color-accent-hover: #0077ED;
+  --color-accent-active: #005BB5;
+  --color-accent-subtle: rgba(0, 113, 227, 0.08);
+  --color-accent-border: rgba(0, 113, 227, 0.22);
+  --color-accent-text: #0071E3;
+
+  /* Cores Semânticas de Estado (Rigor Institucional) */
+  --color-success: #34C759;
+  --color-success-subtle: rgba(52, 199, 89, 0.10);
+  --color-success-border: rgba(52, 199, 89, 0.22);
+  --color-success-text: #1F7A34;
+
+  --color-warning: #FF9500;
+  --color-warning-subtle: rgba(255, 149, 0, 0.10);
+  --color-warning-border: rgba(255, 149, 0, 0.22);
+  --color-warning-text: #B25900;
+
+  --color-danger: #FF3B30;
+  --color-danger-subtle: rgba(255, 59, 48, 0.10);
+  --color-danger-border: rgba(255, 59, 48, 0.22);
+  --color-danger-text: #D70015;
+
+  /* ========================================================================
+     5. SOMBRAS INTENCIONAIS (Sem manchas escuras ou "sujas")
+     ======================================================================== */
+  --shadow-none: none;
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--color-border-subtle);
+  --shadow-dropdown: 0 4px 14px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--color-border-subtle);
+  --shadow-modal: 0 16px 36px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--color-border-subtle);
+
+  /* Dimensões de Controlo e Áreas de Toque (Min 40px) */
+  --control-height-sm: 32px;
+  --control-height-md: 40px;
+  --control-height-lg: 44px;
+
+  /* Transições de precisão */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.22s ease;
+}
+
+/* ==========================================================================
+   TEMA ESCURO NATIVO (OLED & GRAFITE)
+   ========================================================================== */
+[data-theme="dark"],
+body.theme-dark {
+  --color-bg-canvas: #0A0A0C;
+  --color-surface-base: #141416;
+  --color-surface-subtle: #18181B;
+  --color-surface-secondary: #202024;
+  --color-surface-tertiary: #2C2C30;
+  --color-surface-hover: rgba(255, 255, 255, 0.05);
+  --color-surface-active: rgba(255, 255, 255, 0.09);
+
+  --color-text-primary: #F2F2F4;
+  --color-text-secondary: #9E9EA4;
+  --color-text-tertiary: #717178;
+  --color-text-inverse: #0A0A0C;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+
+  --color-accent: #2997FF;
+  --color-accent-hover: #47A7FF;
+  --color-accent-active: #0A84FF;
+  --color-accent-subtle: rgba(41, 151, 255, 0.12);
+  --color-accent-border: rgba(41, 151, 255, 0.28);
+  --color-accent-text: #2997FF;
+
+  --color-success: #30D158;
+  --color-success-subtle: rgba(48, 209, 88, 0.14);
+  --color-success-border: rgba(48, 209, 88, 0.28);
+  --color-success-text: #30D158;
+
+  --color-warning: #FF9F0A;
+  --color-warning-subtle: rgba(255, 159, 10, 0.14);
+  --color-warning-border: rgba(255, 159, 10, 0.28);
+  --color-warning-text: #FF9F0A;
+
+  --color-danger: #FF453A;
+  --color-danger-subtle: rgba(255, 69, 58, 0.14);
+  --color-danger-border: rgba(255, 69, 58, 0.28);
+  --color-danger-text: #FF453A;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--color-border-subtle);
+  --shadow-dropdown: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-border-subtle);
+  --shadow-modal: 0 20px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--color-border-subtle);
+}
+
+/* ==========================================================================
+   CLASSES UTILITÁRIAS PARA ELIMINAÇÃO TOTAL DE ESTILOS INLINE
+   ========================================================================== */
+
+/* Escondido sem inline style="display: none;" */
+.hidden,
+.is-hidden {
+  display: none !important;
+}
+
+/* Spinner grande de carregamento inicial (sem inline style) */
+.spinner-lg {
+  width: 28px !important;
+  height: 28px !important;
+  border-width: 3px !important;
+}
+
+/* Tipografia Utilitária */
+.text-align-right { text-align: right !important; }
+.text-align-center { text-align: center !important; }
+.text-align-left { text-align: left !important; }
+
+.font-mono { font-family: var(--font-family-mono) !important; }
+.text-muted { color: var(--color-text-secondary) !important; }
+.text-accent { color: var(--color-accent) !important; }
+
+/* Margens padronizadas (Múltiplos de 4px / 8px) */
+.mt-0 { margin-top: var(--space-0) !important; }
+.mt-1 { margin-top: var(--space-1) !important; }
+.mt-2 { margin-top: var(--space-2) !important; }
+.mt-3 { margin-top: var(--space-3) !important; }
+.mt-4 { margin-top: var(--space-4) !important; }
+.mt-6 { margin-top: var(--space-6) !important; }
+.mt-8 { margin-top: var(--space-8) !important; }
+
+.mb-0 { margin-bottom: var(--space-0) !important; }
+.mb-1 { margin-bottom: var(--space-1) !important; }
+.mb-2 { margin-bottom: var(--space-2) !important; }
+.mb-3 { margin-bottom: var(--space-3) !important; }
+.mb-4 { margin-bottom: var(--space-4) !important; }
+.mb-6 { margin-bottom: var(--space-6) !important; }
+
+/* Flexbox utilitário semanticamente correto */
+.flex-row-center {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.flex-row-between {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.flex-col {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.flex-wrap {
+  flex-wrap: wrap !important;
+}
+
+.gap-1 { gap: var(--space-1) !important; }
+.gap-2 { gap: var(--space-2) !important; }
+.gap-3 { gap: var(--space-3) !important; }
+.gap-4 { gap: var(--space-4) !important; }
+.gap-5 { gap: var(--space-5) !important; }
+.gap-6 { gap: var(--space-6) !important; }
+
+.w-full { width: 100% !important; }
+
+/* Spinners */
+.spinner-sm {
+  width: 14px !important;
+  height: 14px !important;
+  border-width: 2px !important;
+}
+
+.spinner-md {
+  width: 28px !important;
+  height: 28px !important;
+  border-width: 3px !important;
+}
+
+/* Utilities adicionais de layout */
+.text-right { text-align: right !important; }
+.text-center { text-align: center !important; }
+.text-left { text-align: left !important; }
+.d-flex { display: flex !important; }
+.d-none { display: none !important; }
+.mb-6px { margin-bottom: 6px !important; }
+.mt-8px { margin-top: 8px !important; }
+.mt-10px { margin-top: 10px !important; }
+.mt-20px { margin-top: 20px !important; }
+.mb-24px { margin-bottom: 24px !important; }
+.textarea-resize-v { resize: vertical !important; }
+

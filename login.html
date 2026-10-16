@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PoliCloud - Iniciar Sessão | IPPLN</title>
   <meta name="description" content="Autenticação na intranet escolar do Instituto Politécnico Pascoal Luvualu do Namibe." />
+  <link rel="stylesheet" href="./css/theme.css" />
   <link rel="stylesheet" href="./css/style.css" />
   <script>
     (function(){
@@ -24,7 +25,7 @@
 
   <!-- Overlay de verificação de sessão activa -->
   <div id="session-check-overlay" class="session-check-overlay" aria-live="polite">
-    <div class="spinner spinner-light" style="width: 28px; height: 28px; border-width: 3px;"></div>
+    <div class="spinner spinner-light spinner-lg"></div>
     <span class="session-check-text">A verificar sessão...</span>
   </div>
 
@@ -119,7 +120,7 @@
 
             <!-- Botão de Entrar (Royal Blue Button) -->
             <button type="submit" id="submit-btn" class="btn-auth-royal-blue">
-              <span id="btn-spinner" class="spinner spinner-light" style="display: none;" aria-hidden="true"></span>
+              <span id="btn-spinner" class="spinner spinner-light hidden" aria-hidden="true"></span>
               <span id="btn-text">Entrar na Intranet</span>
             </button>
           </form>
@@ -156,9 +157,9 @@
             <div class="showcase-topbar">
               <div class="showcase-user-pill">
                 <div class="showcase-user-avatar">IP</div>
-                <div style="display:flex;flex-direction:column;">
+                <div class="flex-col">
                   <span class="showcase-user-name">Portal Académico IPPLN</span>
-                  <span style="font-size:10.5px;color:#6E6E73;">Ano Lectivo 2026 • Namibe</span>
+                  <span class="showcase-subtext">Ano Lectivo 2026 • Namibe</span>
                 </div>
               </div>
               <div class="showcase-time-badge">
@@ -171,7 +172,7 @@
               <div class="showcase-card metric-apple-blue">
                 <span class="showcase-metric-label">Cloud Académica</span>
                 <div class="showcase-metric-value">Materiais & Guias</div>
-                <span style="font-size:11px;opacity:0.88;">Organizados por disciplina e turma</span>
+                <span class="showcase-card-caption">Organizados por disciplina e turma</span>
               </div>
 
               <div class="showcase-card metric-white">

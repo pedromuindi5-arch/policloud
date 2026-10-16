@@ -7,12 +7,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Pro+Text:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/theme.css">
   <link rel="stylesheet" href="./css/style.css">
 </head>
 <body class="dashboard-page light-theme">
   <!-- Overlay de verificação de sessão e role -->
   <div id="session-check-overlay" class="session-check-overlay" aria-live="polite">
-    <div class="spinner spinner-light" style="width: 28px; height: 28px; border-width: 3px;"></div>
+    <div class="spinner spinner-light spinner-lg"></div>
     <span class="session-check-text">A carregar mensagens e canais...</span>
   </div>
 
@@ -133,8 +134,8 @@
         <aside class="chat-sidebar" aria-label="Lista de canais e conversas">
           <div class="chat-sidebar-header">
             <div class="chat-sidebar-title-row">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-accent);">
+              <div class="chat-brand-wrap">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-accent">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
                 <h2 class="chat-sidebar-title">Mensagens</h2>
@@ -207,13 +208,13 @@
           </div>
 
           <!-- Prévia de Anexo antes do Envio -->
-          <div id="chat-attachment-preview-bar" class="chat-attachment-preview-bar" style="display: none;">
+          <div id="chat-attachment-preview-bar" class="chat-attachment-preview-bar hidden">
             <div class="chat-attachment-preview-info">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-accent">
                 <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
               </svg>
               <span id="chat-attachment-name">ficheiro.pdf</span>
-              <span id="chat-attachment-size" style="font-size: 11px; opacity: 0.7;">(0 KB)</span>
+              <span id="chat-attachment-size" class="chat-attachment-size">(0 KB)</span>
             </div>
             <button type="button" id="btn-remove-attachment" class="chat-attachment-remove-btn" title="Remover anexo">✕</button>
           </div>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PoliCloud - Nuvem de Ficheiros & Materiais | IPPLN</title>
   <meta name="description" content="Gestão e partilha de ficheiros pedagógicos, sebentas e apontamentos do Instituto Politécnico Pascoal Luvualu do Namibe." />
+  <link rel="stylesheet" href="./css/theme.css" />
   <link rel="stylesheet" href="./css/style.css" />
   <script>
     (function(){
@@ -19,7 +20,7 @@
 <body>
   <!-- Overlay de verificação de sessão e perfil -->
   <div id="session-check-overlay" class="session-check-overlay" aria-live="polite">
-    <div class="spinner spinner-light" style="width: 28px; height: 28px; border-width: 3px;"></div>
+    <div class="spinner spinner-light spinner-md"></div>
     <span class="session-check-text">A ligar à Cloud Politécnica...</span>
   </div>
 
@@ -114,7 +115,7 @@
           </button>
         </div>
 
-        <div id="demo-role-switcher" class="demo-role-switcher" style="display: none;"></div>
+        <div id="demo-role-switcher" class="demo-role-switcher"></div>
 
         <div class="sidebar-user-mini">
           <div id="sidebar-user-avatar" class="user-avatar">U</div>
@@ -363,14 +364,14 @@
           <div id="upload-form-alert" class="alert-box"></div>
 
           <!-- Contexto Automático de Pasta Aberta -->
-          <div id="upload-folder-context-pill" class="upload-folder-context-pill" style="display: none;">
+          <div id="upload-folder-context-pill" class="upload-folder-context-pill">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
             </svg>
             <div>
-              <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; display: block; opacity: 0.85;">Pasta de Destino Automática</span>
-              <strong id="upload-context-name" style="font-size: 14px;">Redes de Computadores</strong>
-              <span id="upload-context-subtext" style="font-size: 12px; opacity: 0.8; margin-left: 6px;"></span>
+              <span class="upload-context-badge">Pasta de Destino Automática</span>
+              <strong id="upload-context-name" class="upload-context-name">Redes de Computadores</strong>
+              <span id="upload-context-subtext" class="upload-context-subtext"></span>
             </div>
           </div>
 
@@ -380,7 +381,7 @@
               Ficheiro a Carregar <span class="label-required">*</span>
             </label>
             <div id="file-dropzone" class="news-upload-dropzone">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--color-accent); margin-bottom: 8px;">
+              <svg class="upload-dropzone-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
@@ -398,15 +399,15 @@
             </div>
 
             <!-- Prévia do Ficheiro Selecionado -->
-            <div id="file-preview-card" class="image-preview-card" style="display: none; margin-top: 10px;">
-              <div class="image-preview-info" style="display: flex; align-items: center; gap: 12px;">
+            <div id="file-preview-card" class="image-preview-card mt-10px">
+              <div class="image-preview-info">
                 <div class="cloud-file-icon file-icon-pdf" id="preview-file-icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
                     <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
                   </svg>
                 </div>
-                <div style="display: flex; flex-direction: column;">
+                <div class="flex-col">
                   <span id="preview-file-name" class="image-preview-title">ficheiro.pdf</span>
                   <span id="preview-file-size" class="image-preview-meta">0 KB</span>
                 </div>
@@ -421,13 +422,13 @@
           </div>
 
           <!-- Barra de Progresso de Upload -->
-          <div id="upload-progress-box" class="upload-progress-box" style="display: none;">
+          <div id="upload-progress-box" class="upload-progress-box">
             <div class="upload-progress-info">
               <span id="upload-progress-text">A carregar ficheiro...</span>
               <span id="upload-progress-percent">0%</span>
             </div>
             <div class="upload-progress-track">
-              <div id="upload-progress-bar" class="upload-progress-bar" style="width: 0%;"></div>
+              <div id="upload-progress-bar" class="upload-progress-bar"></div>
             </div>
           </div>
 
@@ -490,8 +491,8 @@
           </div>
 
           <!-- Indicador Informativo Estrito para Aluno -->
-          <div id="student-upload-note" style="display: none; padding: 10px 14px; background: rgba(0, 113, 227, 0.08); border: 1px solid rgba(0, 113, 227, 0.2); border-radius: 8px; font-size: 12.5px; color: var(--color-accent); margin-top: 4px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+          <div id="student-upload-note" class="student-upload-note">
+            <svg class="info-note-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="16" x2="12" y2="12"/>
               <line x1="12" y1="8" x2="12.01" y2="8"/>

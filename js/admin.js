@@ -856,7 +856,7 @@ async function handleToggleUserStatus(userId, userName, currentStatus) {
   if (btn) {
     originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = `<div class="spinner spinner-light" style="width: 12px; height: 12px; border-width: 2px;"></div> <span>A processar...</span>`;
+    btn.innerHTML = `<div class="spinner spinner-light spinner-sm"></div> <span>A processar...</span>`;
   }
 
   try {
@@ -1575,7 +1575,7 @@ async function handleEditUserSubmit(e) {
 
   if (btnSubmitEditUser) {
     btnSubmitEditUser.disabled = true;
-    btnSubmitEditUser.innerHTML = `<div class="spinner spinner-light" style="width: 14px; height: 14px; border-width: 2px;"></div> <span>A guardar...</span>`;
+    btnSubmitEditUser.innerHTML = `<div class="spinner spinner-light spinner-sm"></div> <span>A guardar...</span>`;
   }
 
   try {
@@ -2253,7 +2253,7 @@ if (formManageCourse) {
     
     const submitBtn = formManageCourse.querySelector('button[type="submit"]');
     const oldText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<div class="spinner spinner-light" style="width: 14px; height: 14px; border-width: 2px;"></div>';
+    submitBtn.innerHTML = '<div class="spinner spinner-light spinner-sm"></div>';
     submitBtn.disabled = true;
     
     try {
@@ -2302,7 +2302,7 @@ if (btnDeleteCourse) {
     if (!confirmed) return;
     
     const oldText = btnDeleteCourse.innerHTML;
-    btnDeleteCourse.innerHTML = '<div class="spinner spinner-light" style="width: 14px; height: 14px; border-width: 2px;"></div>';
+    btnDeleteCourse.innerHTML = '<div class="spinner spinner-light spinner-sm"></div>';
     btnDeleteCourse.disabled = true;
     
     try {
@@ -2382,7 +2382,7 @@ if (formImportDisciplina) {
     
     const submitBtn = formImportDisciplina.querySelector('button[type="submit"]');
     const oldText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<div class="spinner spinner-light" style="width: 14px; height: 14px; border-width: 2px;"></div>';
+    submitBtn.innerHTML = '<div class="spinner spinner-light spinner-sm"></div>';
     submitBtn.disabled = true;
     
     try {

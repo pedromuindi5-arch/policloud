@@ -1661,7 +1661,7 @@ async function initCloudApp() {
   } catch (err) {
     console.error('Erro ao renderizar a Cloud:', err);
     if (cloudFilesContainer) {
-      cloudFilesContainer.innerHTML = `<div class="state-empty" style="padding: 40px 20px; text-align:center;">Não foi possível carregar os ficheiros. Tente novamente.</div>`;
+      cloudFilesContainer.innerHTML = `<div class="state-empty state-empty-spaced text-center">Não foi possível carregar os ficheiros. Tente novamente.</div>`;
     }
   } finally {
     if (sessionOverlay) sessionOverlay.style.display = 'none';

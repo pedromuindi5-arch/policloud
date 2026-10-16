@@ -1,9 +1,11 @@
+@import "./theme.css";
+
 /* PoliCloud - Intranet Escolar IPPLN */
 /* Instituto Politécnico Pascoal Luvualu do Namibe */
-/* Design System Completo — Apple HIG (Human Interface Guidelines) */
+/* Design System Completo — Apple HIG & Impeccable Architecture */
 
 /* ==========================================================================
-   1. DESIGN TOKENS SEMÂNTICOS (APPLE HIG SPECIFICATIONS)
+   1. DESIGN TOKENS SEMÂNTICOS (APPLE HIG & IMPECCABLE SPECIFICATIONS)
    ========================================================================== */
 
 :root,
@@ -13,21 +15,21 @@ body.theme-light {
   --font-system: system-ui, -apple-system, "SF Pro Display", "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif;
   
   /* Dimensões de Controlo e Áreas de Toque Apple */
-  --control-min-height: 44px;
-  --control-min-width: 44px;
+  --control-min-height: 40px;
+  --control-min-width: 40px;
 
-  /* Espaçamento Escalar */
+  /* Espaçamento Escalar em múltiplos de 4px / 8px */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
   --space-lg: 24px;
-  --space-xl: 36px;
+  --space-xl: 32px;
   --space-2xl: 48px;
 
-  /* Raio Concêntrico Apple */
-  --radius-control: 10px;
-  --radius-card: 16px;
-  --radius-modal: 24px;
+  /* Raio Rigoroso (4px - 8px) Conforme .agents/skills/impeccable.md */
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-modal: 10px;
   --radius-pill: 9999px;
 
   /* Transições Orgânicas Linear/Bezier */
@@ -80,10 +82,10 @@ body.theme-light {
   --color-purple: #AF52DE;
   --color-purple-subtle: rgba(175, 82, 222, 0.12);
 
-  /* Sombras Discretas Apple */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.10);
+  /* Sombras Discretas e Limpas (Anti-IA) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.08);
 
   /* Variáveis legadas */
   --apple-bg: var(--color-bg-canvas);
@@ -170,9 +172,9 @@ body.theme-dark {
 
   --color-purple: #BF5AF2;
 
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.50);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.65);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.85);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.60);
 
   --apple-bg: var(--color-bg-canvas);
   --apple-surface: var(--color-surface-base);
@@ -338,7 +340,7 @@ button {
   color: #FFFFFF;
   background-color: var(--color-accent);
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control, 6px);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: all var(--motion-fast);
@@ -349,13 +351,15 @@ button {
 
 .btn-primary:hover, .btn-submit:hover, .btn-cloud-upload:hover, .btn-admin-action:hover, .btn-mural-primary:hover, .btn-modal-submit:hover {
   background-color: var(--color-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
   color: #FFFFFF;
 }
 
+.btn-primary:focus-visible, .btn-submit:focus-visible, .btn-cloud-upload:focus-visible, .btn-admin-action:focus-visible, .btn-mural-primary:focus-visible, .btn-modal-submit:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
+}
+
 .btn-primary:active, .btn-submit:active, .btn-cloud-upload:active, .btn-modal-submit:active {
-  transform: translateY(0);
   background-color: var(--color-accent-active);
   box-shadow: var(--shadow-sm);
 }
@@ -368,13 +372,13 @@ button {
   min-height: var(--control-min-height);
   min-width: var(--control-min-width);
   padding: 10px 22px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary);
   background-color: var(--color-surface-base);
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control, 6px);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: all var(--motion-fast);
@@ -385,11 +389,14 @@ button {
 .btn-secondary:hover, .btn-outline:hover, .btn-reset:hover, .btn-modal-cancel:hover {
   background-color: var(--color-surface-hover);
   border-color: var(--color-border-strong);
-  transform: translateY(-1px);
+}
+
+.btn-secondary:focus-visible, .btn-outline:focus-visible, .btn-reset:focus-visible, .btn-modal-cancel:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
 }
 
 .btn-secondary:active, .btn-outline:active, .btn-reset:active, .btn-modal-cancel:active {
-  transform: translateY(0);
   background-color: var(--color-surface-active);
 }
 
@@ -7352,5 +7359,350 @@ body {
     border-radius: 14px !important;
   }
 }
+
+/* ==========================================================================
+   POLICLOUD — COMPONENT CLASSES FOR ZERO INLINE STYLES ARCHITECTURE
+   ========================================================================== */
+
+/* Redirection screen */
+.redirect-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--color-text-primary);
+  background: var(--color-bg-canvas);
+}
+.redirect-title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  margin: 0;
+}
+.redirect-desc {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  margin: 0;
+}
+.redirect-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  font-size: var(--text-base);
+}
+
+/* Initial Hidden Dynamic Elements (Pure CSS without inline style="display: none") */
+#admin-publish-section,
+#pinned-section,
+#image-preview-card,
+#upload-progress-box,
+#reader-image-wrapper,
+#reader-pinned-badge,
+#reader-category-badge,
+#demo-role-switcher,
+#student-turma-badge-wrap,
+#teacher-turma-selector-wrap,
+#teacher-admin-actions,
+#pinned-posts-section,
+#tab-pane-calendar,
+#upload-folder-context-pill,
+#file-preview-card,
+#student-upload-note,
+#users-pagination,
+#disciplinas-pagination,
+#view-disciplinas-table,
+#teacher-specific-fields,
+#edit-teacher-specific-fields,
+#btn-delete-course {
+  display: none;
+}
+
+/* Noticias components */
+.state-loading-grid {
+  grid-column: 1 / -1;
+  padding: 40px 16px;
+}
+
+.reader-modal-meta-bottom {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Mural components */
+.teacher-actions-group {
+  gap: var(--space-2);
+}
+
+/* Cloud components */
+.upload-context-badge {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: block;
+  opacity: 0.85;
+}
+
+.upload-context-name {
+  font-size: var(--text-base);
+}
+
+.upload-context-subtext {
+  font-size: var(--text-sm);
+  opacity: 0.8;
+  margin-left: 6px;
+}
+
+.upload-dropzone-icon {
+  color: var(--color-accent);
+  margin-bottom: var(--space-2);
+}
+
+.student-upload-note {
+  display: none;
+  padding: 10px 14px;
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-card);
+  font-size: 12.5px;
+  color: var(--color-accent);
+  margin-top: 4px;
+}
+
+.info-note-icon {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+/* Admin components */
+.admin-table-right {
+  text-align: right;
+}
+
+.subtext-right {
+  text-align: right;
+  margin-top: var(--space-4);
+}
+
+.card-action-link-full {
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.btn-assignment-add {
+  padding: 4px 12px !important;
+  min-height: unset !important;
+  font-size: 13px !important;
+}
+
+.assignments-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.assignments-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.disc-turma-field-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.disc-turma-field-select {
+  font-size: 13px;
+}
+
+.disc-turmas-grid {
+  gap: 10px;
+}
+
+.disc-assignment-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.disc-assignment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.form-label-hint {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.text-meta-secondary {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.btn-nav-compact {
+  padding: 6px 14px;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.disc-turmas-inputs-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-modal-card-md {
+  max-width: 580px;
+}
+
+.admin-modal-card-lg {
+  max-width: 660px;
+}
+
+.disc-turmas-header-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-modal);
+  margin-bottom: var(--space-4);
+}
+
+.disc-turmas-instructions {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 14px;
+}
+
+.badge-code {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.entity-title-sm {
+  font-size: 15px;
+  display: block;
+  color: var(--color-text-primary);
+}
+
+.admin-modal-icon-accent {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.teacher-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-modal);
+  margin-bottom: var(--space-4);
+}
+
+.avatar-md {
+  width: 44px;
+  height: 44px;
+  font-size: var(--text-md);
+}
+
+.admin-summary-pill {
+  padding: 10px 14px;
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-card);
+  font-size: 12.5px;
+  color: var(--color-accent);
+  margin-top: var(--space-2);
+}
+
+.subpanel-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.flex-row-center-gap12 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.filters-row-bottom {
+  align-items: flex-end;
+}
+
+.filter-item-search {
+  flex: 1.5;
+  min-width: 240px;
+}
+
+.view-cursos-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: 10px;
+}
+
+.cursos-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+
+.disciplinas-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-bottom: var(--space-3);
+}
+
+.form-input-disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  background: var(--apple-surface-secondary);
+}
+
+.admin-modal-footer-between {
+  display: flex;
+  justify-content: space-between;
+}
+
+.admin-modal-footer-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.btn-filter-action {
+  height: 42px;
+  min-height: 42px;
+}
+
+.storage-breakdown-grid {
+  margin-top: var(--space-5);
+}
+
+.state-empty-spaced {
+  padding: 40px 20px !important;
+}
+
+
 
 
