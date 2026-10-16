@@ -124,142 +124,89 @@
             </button>
           </form>
 
-          <!-- Divisor SSO -->
-          <div class="auth-divider">
-            <span>Ou Entrar Com</span>
-          </div>
-
-          <!-- Botões SSO / Alternativos (Google & Apple) -->
-          <div class="auth-sso-row">
-            <button type="button" class="btn-sso-option" onclick="alert('Autenticação com Google em fase de testes institucionais.');">
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.27v3.15C3.25 21.3 7.31 24 12 24z"/>
-                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.27C.46 8.2.01 10.04.01 12c0 1.96.45 3.8 1.26 5.42l4.01-3.15z"/>
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.58l4.01 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-              </svg>
-              <span>Google</span>
-            </button>
-            <button type="button" class="btn-sso-option" onclick="alert('Autenticação ID Apple em fase de implementação.');">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.34c.56-.68.95-1.62.84-2.56-.82.03-1.83.55-2.41 1.23-.52.6-.98 1.56-.86 2.49.92.07 1.87-.48 2.43-1.16Z"/>
-              </svg>
-              <span>Apple</span>
-            </button>
+          <!-- Nota Institucional de Acesso Seguro -->
+          <div class="auth-institutional-note">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>Acesso institucional restrito a estudantes, docentes e administração registados na Secretaria Académica do IPPLN.</span>
           </div>
         </div>
 
         <!-- Rodapé do Lado Esquerdo -->
         <footer class="auth-left-footer">
-          <p>Copyright © 2026 PoliCloud IPPLN.</p>
-          <button type="button" onclick="alert('Instituto Politécnico Pascoal Luvualu do Namibe - Termos & Privacidade');" class="auth-privacy-link">Política de Privacidade</button>
+          <p>© 2026 Instituto Politécnico Pascoal Luvualu do Namibe</p>
+          <span class="auth-privacy-link">Intranet Académica PoliCloud</span>
         </footer>
       </section>
 
-      <!-- LADO DIREITO: HERO AZUL ROYAL E SHOWCASE UI DA INTRANET -->
+      <!-- LADO DIREITO: PAINEL INSTITUCIONAL APPLE HIG (#0071E3) -->
       <section class="auth-right-section">
-        <!-- Formas decorativas orgânicas de fundo -->
-        <div class="auth-hero-glow glow-1"></div>
-        <div class="auth-hero-glow glow-2"></div>
-
         <div class="auth-hero-content">
           <!-- Textos Hero -->
           <div class="auth-hero-text">
-            <h2 class="auth-hero-headline">Gerencie a sua vida académica e recursos com simplicidade.</h2>
-            <p class="auth-hero-subtext">Aceda ao mural da turma, materiais pedagógicos em nuvem e comunicados escolares do IPPLN.</p>
+            <span class="auth-hero-eyebrow">INTRANET ACADÉMICA • IPPLN</span>
+            <h2 class="auth-hero-headline">Todo o seu percurso académico num único espaço seguro.</h2>
+            <p class="auth-hero-subtext">Consulte materiais pedagógicos na Cloud, acompanhe o calendário de avaliações da sua turma e comunique diretamente com os seus docentes.</p>
           </div>
 
-          <!-- Showcase Visual da Interface (Mini Dashboard Card) -->
+          <!-- Showcase Institucional Fiel (Apple Quiet Geometry) -->
           <div class="intranet-ui-showcase" aria-hidden="true">
-            <!-- Barra de Topo da Mini UI -->
             <div class="showcase-topbar">
               <div class="showcase-user-pill">
-                <div class="showcase-user-avatar">JD</div>
-                <span class="showcase-user-name">João Domingos</span>
+                <div class="showcase-user-avatar">IP</div>
+                <div style="display:flex;flex-direction:column;">
+                  <span class="showcase-user-name">Portal Académico IPPLN</span>
+                  <span style="font-size:10.5px;color:#6E6E73;">Ano Lectivo 2026 • Namibe</span>
+                </div>
               </div>
               <div class="showcase-time-badge">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </svg>
-                <span>00:01:30</span>
+                <span class="showcase-dot-active"></span>
+                <span>Rede Interna & Cloud</span>
               </div>
             </div>
 
-            <!-- Grelha de Métricas da Mini UI -->
             <div class="showcase-grid">
-              <!-- Card 1: Valor/Recursos -->
-              <div class="showcase-card metric-purple">
-                <span class="showcase-metric-label">Espaço Nuvem</span>
-                <div class="showcase-metric-value">189.376 MB</div>
-                <div class="showcase-mini-bar"><div class="bar-fill" style="width: 78%;"></div></div>
+              <div class="showcase-card metric-apple-blue">
+                <span class="showcase-metric-label">Cloud Académica</span>
+                <div class="showcase-metric-value">Materiais & Guias</div>
+                <span style="font-size:11px;opacity:0.88;">Organizados por disciplina e turma</span>
               </div>
 
-              <!-- Card 2: Estatística Turma -->
               <div class="showcase-card metric-white">
-                <span class="showcase-metric-label">Aulas Assistidas</span>
-                <div class="showcase-metric-value">21.884 min</div>
-                <span class="showcase-badge-up">+14% este mês</span>
+                <span class="showcase-metric-label">Mural & Calendário</span>
+                <div class="showcase-metric-value">Avisos Oficiais</div>
+                <span class="showcase-badge-up">Provas, entregas e horários</span>
               </div>
             </div>
 
-            <!-- Gráfico Wave e Manómetro Circular em Flex -->
-            <div class="showcase-middle-row">
-              <!-- Gráfico de Linha Soft Wave -->
-              <div class="showcase-chart-box">
-                <div class="showcase-chart-header">
-                  <span>Atividade Académica</span>
-                  <span class="showcase-dot-active"></span>
-                </div>
-                <div class="showcase-wave-svg">
-                  <svg viewBox="0 0 200 60" fill="none" preserveAspectRatio="none">
-                    <path d="M0 45 Q40 10, 80 35 T160 15 T200 40 L200 60 L0 60 Z" fill="rgba(124, 58, 237, 0.12)"/>
-                    <path d="M0 45 Q40 10, 80 35 T160 15 T200 40" stroke="#7C3AED" stroke-width="3" fill="none" stroke-linecap="round"/>
-                  </svg>
-                </div>
-              </div>
-
-              <!-- Cartão Gauge (Manómetro de Vendas / Ficheiros) -->
-              <div class="showcase-gauge-card">
-                <div class="showcase-gauge-header">
-                  <span>Total Materiais</span>
-                  <span class="gauge-tag">Nuvem</span>
-                </div>
-                <div class="gauge-arc-wrapper">
-                  <div class="gauge-arc-bg"></div>
-                  <div class="gauge-arc-fill"></div>
-                  <div class="gauge-center-text">
-                    <strong>6.248</strong>
-                    <small>Unidades</small>
-                  </div>
-                </div>
-                <div class="gauge-legend">
-                  <span class="legend-dot dot-purple"></span> PDF / Docs
-                  <span class="legend-dot dot-blue"></span> Multimédia
-                </div>
-              </div>
-            </div>
-
-            <!-- Tabela Miniatura de Actividades Recentes -->
             <div class="showcase-table">
               <div class="showcase-row">
                 <div class="row-cell cell-file">
                   <span class="file-icon pdf">PDF</span>
                   <span class="file-name">Guia_Eng_Informatica.pdf</span>
                 </div>
-                <div class="row-cell cell-date">18 Fev 2026</div>
+                <div class="row-cell cell-date">Informática</div>
                 <div class="row-cell cell-status status-ok">Disponível</div>
               </div>
               <div class="showcase-row">
                 <div class="row-cell cell-file">
                   <span class="file-icon doc">DOC</span>
-                  <span class="file-name">Horario_Aulas_2026.docx</span>
+                  <span class="file-name">Calendario_Avaliacoes_2026.docx</span>
                 </div>
-                <div class="row-cell cell-date">15 Fev 2026</div>
-                <div class="row-cell cell-status status-ok">Atualizado</div>
+                <div class="row-cell cell-date">Secretaria</div>
+                <div class="row-cell cell-status status-ok">Oficial</div>
+              </div>
+              <div class="showcase-row">
+                <div class="row-cell cell-file">
+                  <span class="file-icon doc">LAB</span>
+                  <span class="file-name">Topologia_Redes_CCNA_IPPLN.pkt</span>
+                </div>
+                <div class="row-cell cell-date">Redes</div>
+                <div class="row-cell cell-status status-ok">Turma 12ª</div>
               </div>
             </div>
-
           </div>
         </div>
       </section>

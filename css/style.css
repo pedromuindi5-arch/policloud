@@ -7040,3 +7040,295 @@ body {
   }
 }
 
+/* ==========================================================================
+   18. REFINAMENTO APPLE HIG & ENTERPRISE DESIGN (ZERO AI-LOOK)
+   Cor de Destaque Institucional: Azul Apple (#0071E3)
+   ========================================================================== */
+
+/* 18.1. Eliminação de Manchas de Blur, Círculos Cortados e Animações Pulse */
+.auth-hero-glow,
+.push-modal-glow,
+.news-header-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+.cloud-folder-badge-new,
+.push-icon-pulse {
+  animation: none !important;
+}
+
+/* 18.2. Unificação Cromática no Azul Institucional Apple (#0071E3) */
+.btn-auth-royal-blue,
+.btn-folder-upload {
+  background: var(--color-accent) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+  border-radius: 10px !important;
+}
+
+.btn-auth-royal-blue:hover,
+.btn-folder-upload:hover {
+  background: var(--color-accent-hover) !important;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.22) !important;
+  transform: none !important;
+}
+
+.auth-clean-input:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle) !important;
+}
+
+.auth-checkbox {
+  accent-color: var(--color-accent) !important;
+}
+
+.auth-forgot-link {
+  color: var(--color-accent) !important;
+  font-weight: 500 !important;
+}
+
+/* Painel Direito do Login e Showcase Fiel */
+.auth-right-section {
+  background: linear-gradient(160deg, #0071E3 0%, #004B99 100%) !important;
+}
+
+.auth-hero-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  margin-bottom: 10px;
+}
+
+.showcase-user-avatar {
+  background-color: #0071E3 !important;
+}
+
+.metric-apple-blue,
+.metric-purple {
+  background: #0071E3 !important;
+  color: #FFFFFF !important;
+}
+
+.metric-apple-blue .showcase-metric-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.metric-apple-blue .showcase-metric-value {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.showcase-badge-up {
+  color: #0071E3 !important;
+  font-weight: 500 !important;
+}
+
+.auth-institutional-note {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background-color: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.auth-institutional-note svg {
+  color: var(--color-accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* 18.3. Eyebrows Tipográficos Puros (Fim da "Síndrome da Pílula" nos Títulos) */
+.news-header-tag,
+.cloud-header-tag,
+.student-greeting,
+.teacher-greeting,
+.push-badge {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: var(--color-accent) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  box-shadow: none !important;
+}
+
+/* 18.4. Cabeçalhos Compactos, Sóbrios e Arquiteturais (Above the Fold) */
+.news-header-card,
+.cloud-header-card,
+.admin-header-card,
+.student-hero-card,
+.teacher-hero-card,
+.mural-header-card {
+  background: var(--color-surface-base) !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 16px !important;
+  padding: 24px 28px !important;
+  margin-bottom: 24px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+.news-header-title,
+.cloud-header-title,
+.page-title {
+  font-size: clamp(24px, 2.5vw, 30px) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.2 !important;
+}
+
+.news-header-desc,
+.cloud-header-desc,
+.admin-section-desc {
+  font-size: 14.5px !important;
+  line-height: 1.5 !important;
+  color: var(--color-text-secondary) !important;
+}
+
+/* 18.5. Padronização Monocromática/Institucional dos Ícones (Sem Arco-Íris de IA) */
+.admin-stat-icon,
+.stat-icon-blue,
+.stat-icon-emerald,
+.stat-icon-purple,
+.stat-icon-amber,
+.shortcut-icon-wrap,
+.shortcut-icon-mural,
+.shortcut-icon-cloud,
+.shortcut-icon-event,
+.cloud-folder-icon-wrap,
+.selector-icon-badge,
+.file-type-icon {
+  background: var(--color-surface-secondary) !important;
+  color: var(--color-accent) !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.push-icon-pulse {
+  background: var(--color-accent-subtle) !important;
+  color: var(--color-accent) !important;
+  border: 1px solid var(--color-accent-border) !important;
+}
+
+.push-avatar {
+  background: var(--color-accent) !important;
+  color: #FFFFFF !important;
+}
+
+.student-notification-banner {
+  background: var(--color-surface-base) !important;
+  border: 1px solid var(--color-border-strong) !important;
+  border-left: 3px solid var(--color-accent) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.cloud-folder-badge-new {
+  background: var(--color-accent) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+}
+
+/* 18.6. Fim das "Caixas dentro de Caixas" — Listas Editoriais Limpas macOS/iOS */
+.news-list,
+.mural-list,
+.files-list,
+.events-list {
+  gap: 0 !important;
+}
+
+.news-item,
+.mural-post-item,
+.file-item {
+  background-color: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--color-border-subtle) !important;
+  border-radius: 0 !important;
+  padding: 14px 8px !important;
+  box-shadow: none !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.news-item:last-child,
+.mural-post-item:last-child,
+.file-item:last-child {
+  border-bottom: none !important;
+}
+
+.news-item:hover,
+.mural-post-item:hover,
+.file-item:hover {
+  background-color: var(--color-surface-hover) !important;
+  border-radius: 8px !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 18.7. Micro-interações Sóbrias (Zero "Salto no Hover" em Botões e Cartões) */
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-submit:hover,
+.btn-cloud-upload:hover,
+.btn-admin-action:hover,
+.btn-mural-primary:hover,
+.btn-mural-secondary:hover,
+.btn-modal-submit:hover,
+.btn-modal-cancel:hover,
+.btn-new-news:hover,
+.btn-theme-toggle:hover,
+.shortcut-btn:hover,
+.cloud-folder-card:hover,
+.cloud-file-card:hover,
+.news-featured-card:hover,
+.news-card:hover,
+.intranet-ui-showcase:hover {
+  transform: none !important;
+}
+
+.shortcut-btn:hover,
+.cloud-folder-card:hover,
+.cloud-file-card:hover,
+.news-featured-card:hover,
+.news-card:hover {
+  border-color: var(--color-border-strong) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+}
+
+.cloud-folder-card:hover .cloud-folder-icon-wrap,
+.nav-item:hover .nav-icon,
+.nav-item:hover svg {
+  transform: none !important;
+}
+
+@media (max-width: 640px) {
+  .news-header-card,
+  .cloud-header-card,
+  .admin-header-card,
+  .student-hero-card,
+  .teacher-hero-card,
+  .mural-header-card {
+    padding: 18px 16px !important;
+    border-radius: 14px !important;
+  }
+}
+
+
