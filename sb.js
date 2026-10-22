@@ -167,6 +167,74 @@ export function enrichTeacherFromDisciplinas(profile, disciplinasDB = []) {
   return profile;
 }
 
+export function normalizeAndHealProfile(profile, disciplinasDB = [], userMeta = null) {
+  if (!profile) return profile;
+
+  profile.nome = profile.full_name || profile.nome || (userMeta && (userMeta.full_name || userMeta.nome)) || '';
+
+  const r = (profile.role || (userMeta && userMeta.role) || '').toLowerCase();
+  if (r === 'student' || r === 'aluno') {
+    profile.role = 'aluno';
+  } else if (r === 'teacher' || r === 'professor') {
+    profile.role = 'professor';
+  } else if (r === 'admin') {
+    profile.role = 'admin';
+  }
+  profile.rolePT = profile.role;
+
+  // Fallback para user_metadata (caso o RPC admin_create_user_profile tenha falhado no enum curso_type)
+  if (userMeta) {
+    if (!profile.curso && userMeta.curso) profile.curso = userMeta.curso;
+    if (!profile.classe && userMeta.classe) profile.classe = userMeta.classe;
+    if (!profile.turma && userMeta.turma) profile.turma = cleanTurma(userMeta.turma);
+    if ((!profile.cursos || profile.cursos.length === 0) && userMeta.cursos) profile.cursos = parseArrayField(userMeta.cursos);
+    if ((!profile.classes || profile.classes.length === 0) && userMeta.classes) profile.classes = parseArrayField(userMeta.classes);
+    if ((!profile.turmas || profile.turmas.length === 0) && userMeta.turmas) profile.turmas = parseArrayField(userMeta.turmas).map(cleanTurma).filter(Boolean);
+    if ((!profile.disciplinas || profile.disciplinas.length === 0) && userMeta.disciplinas) profile.disciplinas = parseArrayField(userMeta.disciplinas);
+    if (!profile.disciplina && userMeta.disciplina) profile.disciplina = userMeta.disciplina;
+    if (!profile.atribuicoes_curriculares && userMeta.atribuicoes_curriculares) {
+      profile.atribuicoes_curriculares = userMeta.atribuicoes_curriculares;
+    }
+  }
+
+  // Recuperação de contas criadas antes da correção do enum curso_type no Supabase
+  const emailLower = (profile.email || '').toLowerCase();
+  if (!profile.curso && (profile.id === '3ec19464-5987-4df2-ad41-f6ec0069937e' || emailLower === 'svetlana@ippln.ao')) {
+    profile.curso = 'Telecomunicações';
+    profile.classe = profile.classe || '10ª';
+    profile.turma = cleanTurma(profile.turma || 'A');
+    profile._needsDbHeal = true;
+  }
+  if ((!profile.curso && (!profile.cursos || profile.cursos.length === 0)) && (profile.id === 'ed7ed6dc-6f00-4d9c-bf5f-c09612f6fb8e' || emailLower === 'alberto@ippln.ao')) {
+    profile.curso = 'Telecomunicações';
+    profile.classe = profile.classe || '10ª';
+    profile.turma = cleanTurma(profile.turma || 'A');
+    profile.cursos = ['Telecomunicações'];
+    profile.classes = [profile.classe];
+    profile.turmas = [profile.turma];
+    if (!profile.disciplinas || profile.disciplinas.length === 0) {
+      profile.disciplinas = ['Intro Telecomunicações'];
+      profile.disciplina = 'Intro Telecomunicações';
+    }
+    profile._needsDbHeal = true;
+  }
+
+  if (profile.role === 'aluno') {
+    if (profile.turma) {
+      profile.turma = cleanTurma(profile.turma);
+    }
+  } else if (profile.role === 'professor') {
+    enrichTeacherFromDisciplinas(profile, disciplinasDB);
+  } else {
+    profile.cursos = parseArrayField(profile.cursos || profile.curso);
+    profile.classes = parseArrayField(profile.classes || profile.classe);
+    profile.turmas = parseArrayField(profile.turmas || profile.turma).map(cleanTurma).filter(Boolean);
+    profile.disciplinas = parseArrayField(profile.disciplinas || profile.disciplina);
+  }
+
+  return profile;
+}
+
 export async function getProfile() {
   try {
     const { data } = await sb.auth.getUser();
@@ -174,36 +242,41 @@ export async function getProfile() {
     if (!user) return null;
     const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (profile) {
-      // Alias: o código usa .nome mas a BD tem full_name
-      profile.nome = profile.full_name || profile.nome || '';
-      
-      // Normalização universal dos papéis:
-      const r = (profile.role || '').toLowerCase();
-      if (r === 'student' || r === 'aluno') {
-        profile.role = 'aluno';
-      } else if (r === 'teacher' || r === 'professor') {
-        profile.role = 'professor';
-      } else if (r === 'admin') {
-        profile.role = 'admin';
-      }
-      profile.rolePT = profile.role;
+      const dbCursoBefore = profile.curso;
+      const dbClasseBefore = profile.classe;
+      const dbTurmaBefore = profile.turma;
 
-      if (profile.role === 'aluno') {
-        if (profile.turma) {
-          profile.turma = cleanTurma(profile.turma);
-        }
-      } else if (profile.role === 'professor') {
-        let discsDB = [];
+      let discsDB = [];
+      const r = (profile.role || user.user_metadata?.role || '').toLowerCase();
+      if (r === 'teacher' || r === 'professor') {
         try {
           const { data: dData } = await sb.from('disciplinas').select('nome, curso, classe, professores_turmas');
           if (Array.isArray(dData)) discsDB = dData;
         } catch (_) {}
-        enrichTeacherFromDisciplinas(profile, discsDB);
-      } else {
-        profile.cursos = parseArrayField(profile.cursos || profile.curso);
-        profile.classes = parseArrayField(profile.classes || profile.classe);
-        profile.turmas = parseArrayField(profile.turmas || profile.turma).map(cleanTurma);
-        profile.disciplinas = parseArrayField(profile.disciplinas || profile.disciplina);
+      }
+
+      normalizeAndHealProfile(profile, discsDB, user.user_metadata || {});
+
+      // Auto-reparar na tabela profiles se faltavam campos que estavam em user_metadata ou disciplinas
+      if (
+        profile._needsDbHeal ||
+        (!dbCursoBefore && profile.curso) ||
+        (!dbClasseBefore && profile.classe) ||
+        (!dbTurmaBefore && profile.turma)
+      ) {
+        const healPayload = {
+          curso: profile.curso || (Array.isArray(profile.cursos) && profile.cursos.length > 0 ? profile.cursos.join(', ') : null),
+          classe: profile.classe || (Array.isArray(profile.classes) && profile.classes.length > 0 ? profile.classes.join(', ') : null),
+          turma: profile.turma || (Array.isArray(profile.turmas) && profile.turmas.length > 0 ? profile.turmas.join(', ') : null)
+        };
+        if (profile.role === 'professor') {
+          healPayload.cursos = profile.cursos || [];
+          healPayload.classes = profile.classes || [];
+          healPayload.turmas = profile.turmas || [];
+          healPayload.disciplinas = profile.disciplinas || [];
+          healPayload.disciplina = (profile.disciplinas || []).join(', ') || profile.disciplina || null;
+        }
+        sb.from('profiles').update(healPayload).eq('id', user.id).then(() => {}).catch(() => {});
       }
     }
     return profile;

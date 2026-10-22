@@ -1,10 +1,20 @@
 // PoliCloud - Serviço Global de Mensagens e Notificações (Estilo NetAcad)
-import { sb, getProfile, cleanTurma, sameCourse, normStr, parseArrayField, enrichTeacherFromDisciplinas, getDisciplinasDB } from './sb.js';
+import { sb, getProfile, cleanTurma, sameCourse, normStr, parseArrayField, enrichTeacherFromDisciplinas, normalizeAndHealProfile, getDisciplinasDB } from './sb.js';
 
 const STORAGE_MESSAGES_KEY = 'policloud_chat_messages';
 const STORAGE_PUSH_DISMISSED_KEY = 'policloud_dismissed_push_notifications';
 const STORAGE_STUDENT_DISMISSED_KEY = 'policloud_student_dismissed_notifications';
 const STORAGE_USER_READ_PREFIX = 'policloud_reads_u_';
+
+export function parseDirectConvIds(convId) {
+  if (!convId || !convId.startsWith('direct-')) return [];
+  const rest = convId.slice('direct-'.length);
+  const uuidMatch = rest.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(.+)$/i);
+  if (uuidMatch) return [uuidMatch[1], uuidMatch[2]];
+  const parts = rest.split('-');
+  if (parts.length >= 2) return [parts[0], parts.slice(1).join('-')];
+  return [];
+}
 
 export function getUserReadSet(userId) {
   if (!userId) return new Set();
@@ -146,18 +156,23 @@ export function messageMatchesTurmaScope(msg, scope) {
  */
 export function getUserTurmaScopes(profile) {
   if (!profile) return [];
+  normalizeAndHealProfile(profile);
   let role = (profile.role || 'aluno').toLowerCase();
   if (role === 'student') role = 'aluno';
   if (role === 'teacher') role = 'professor';
 
   const scopes = [];
   if (role === 'aluno') {
-    if (profile.curso && profile.classe && profile.turma) {
-      scopes.push({
-        curso: profile.curso.trim(),
-        classe: profile.classe.trim(),
-        turma: extractTurmaLetter(profile.turma)
-      });
+    if (profile.curso) {
+      const cl = (profile.classe || '10ª').trim();
+      const t = extractTurmaLetter(profile.turma || 'A');
+      if (cl && t) {
+        scopes.push({
+          curso: profile.curso.trim(),
+          classe: cl,
+          turma: t
+        });
+      }
     }
   } else if (role === 'professor') {
     if (Array.isArray(profile.atribuicoes_curriculares) && profile.atribuicoes_curriculares.length > 0) {
@@ -165,10 +180,10 @@ export function getUserTurmaScopes(profile) {
         if (!atr.curso || atr.curso === 'Geral') return;
         const c = atr.curso.trim();
         const cl = (atr.classe && atr.classe !== 'Todas') ? atr.classe.trim() : null;
-        const turmas = Array.isArray(atr.turmas) ? atr.turmas : (atr.turma ? [atr.turma] : []);
-        const classesList = cl ? [cl] : (Array.isArray(profile.classes) && profile.classes.length > 0 ? profile.classes : ['10ª', '11ª', '12ª']);
+        const rawTurmas = Array.isArray(atr.turmas) && atr.turmas.length > 0 ? atr.turmas : (atr.turma ? [atr.turma] : ['A']);
+        const classesList = cl ? [cl] : (Array.isArray(profile.classes) && profile.classes.length > 0 ? profile.classes : ['10ª']);
         classesList.forEach(classeItem => {
-          turmas.forEach(t => {
+          rawTurmas.forEach(t => {
             const cleanT = extractTurmaLetter(t);
             if (cleanT && cleanT !== 'TODAS') {
               scopes.push({ curso: c, classe: classeItem, turma: cleanT });
@@ -176,19 +191,20 @@ export function getUserTurmaScopes(profile) {
           });
         });
       });
-    } else {
-      const cArr = parseArrayField(profile.cursos || profile.curso).filter(c => c && normStr(c) !== 'geral' && normStr(c) !== 'todos');
-      const clArr = parseArrayField(profile.classes || profile.classe).filter(cl => cl && normStr(cl) !== 'todas');
-      const tArr = parseArrayField(profile.turmas || profile.turma).map(t => extractTurmaLetter(t)).filter(t => t && normStr(t) !== 'todas');
-      if (cArr.length > 0 && clArr.length > 0 && tArr.length > 0) {
-        cArr.forEach(c => {
-          clArr.forEach(cl => {
-            tArr.forEach(t => {
-              scopes.push({ curso: c, classe: cl, turma: t });
-            });
+    }
+    const cArr = parseArrayField(profile.cursos || profile.curso).filter(c => c && normStr(c) !== 'geral' && normStr(c) !== 'todos');
+    const clArrRaw = parseArrayField(profile.classes || profile.classe).filter(cl => cl && normStr(cl) !== 'todas');
+    const tArrRaw = parseArrayField(profile.turmas || profile.turma).map(t => extractTurmaLetter(t)).filter(t => t && normStr(t) !== 'todas');
+    if (cArr.length > 0) {
+      const clArr = clArrRaw.length > 0 ? clArrRaw : ['10ª'];
+      const tArr = tArrRaw.length > 0 ? tArrRaw : ['A'];
+      cArr.forEach(c => {
+        clArr.forEach(cl => {
+          tArr.forEach(t => {
+            scopes.push({ curso: c, classe: cl, turma: t });
           });
         });
-      }
+      });
     }
   }
 
@@ -210,11 +226,12 @@ export function getUserTurmaScopes(profile) {
  */
 export function teacherMatchesStudentScope(profProfile, studentProfile) {
   if (!profProfile || !studentProfile) return false;
-  if (!studentProfile.curso || !studentProfile.classe || !studentProfile.turma) return false;
+  normalizeAndHealProfile(studentProfile);
+  if (!studentProfile.curso) return false;
 
   const sCurso = studentProfile.curso;
-  const sClasse = studentProfile.classe;
-  const sTurma = extractTurmaLetter(studentProfile.turma);
+  const sClasse = studentProfile.classe || '10ª';
+  const sTurma = extractTurmaLetter(studentProfile.turma || 'A');
 
   const profScopes = getUserTurmaScopes(profProfile);
   return profScopes.some(ps =>
@@ -258,6 +275,7 @@ export async function getAllMessages(userProfile = null) {
   // Filtrar rigorosamente as mensagens para o utilizador atual, se fornecido
   const userId = userProfile?.id;
   if (userProfile && userId) {
+    const isAdmin = (userProfile.role || '').toLowerCase() === 'admin';
     const userScopes = getUserTurmaScopes(userProfile);
     const userReads = getUserReadSet(userId);
 
@@ -267,9 +285,10 @@ export async function getAllMessages(userProfile = null) {
         return String(m.sender_id) === String(userId) || String(m.recipient_id) === String(userId);
       }
       if (m.conversation_id && m.conversation_id.startsWith('direct-')) {
-        const parts = m.conversation_id.replace('direct-', '').split('-');
-        return parts.includes(String(userId)) || String(m.sender_id) === String(userId) || String(m.recipient_id) === String(userId);
+        const ids = parseDirectConvIds(m.conversation_id);
+        return ids.includes(String(userId)) || String(m.sender_id) === String(userId) || String(m.recipient_id) === String(userId);
       }
+      if (isAdmin) return true;
       // 2. Mensagem de canal de turma: apenas se pertencer exatamente a um dos escopos (curso, classe, turma) do utilizador
       return userScopes.some(sc => messageMatchesTurmaScope(m, sc));
     });
@@ -359,12 +378,11 @@ export async function markConversationAsRead(convId, userProfile) {
   allMsgs.forEach(m => {
     let isThisConv = m.conversation_id === convId;
     if (!isThisConv && convId.startsWith('direct-')) {
-      const parts = convId.replace('direct-', '').split('-');
-      if (parts.length >= 2) {
-        const id1 = parts[0];
-        const id2 = parts[1];
-        if ((m.sender_id === id1 && m.recipient_id === id2) || 
-            (m.sender_id === id2 && m.recipient_id === id1) ||
+      const ids = parseDirectConvIds(convId);
+      if (ids.length >= 2) {
+        const [id1, id2] = ids;
+        if ((String(m.sender_id) === String(id1) && String(m.recipient_id) === String(id2)) || 
+            (String(m.sender_id) === String(id2) && String(m.recipient_id) === String(id1)) ||
             m.conversation_id === `direct-${id1}-${id2}` ||
             m.conversation_id === `direct-${id2}-${id1}`) {
           isThisConv = true;
@@ -402,26 +420,42 @@ export async function markConversationAsRead(convId, userProfile) {
 export async function getConversationsListForUser(profile) {
   if (!profile) return [];
 
-  let role = (profile.role || 'aluno').toLowerCase();
-  if (role === 'student') role = 'aluno';
-  if (role === 'teacher') role = 'professor';
-
-  // Garantir que as disciplinas da BD enriquecem o perfil do professor
   let allDisciplinas = [];
   try {
     allDisciplinas = await getDisciplinasDB();
   } catch (e) {}
 
-  if (role === 'professor' && allDisciplinas.length > 0) {
-    enrichTeacherFromDisciplinas(profile, allDisciplinas);
-  }
+  normalizeAndHealProfile(profile, allDisciplinas);
+
+  let role = (profile.role || 'aluno').toLowerCase();
+  if (role === 'student') role = 'aluno';
+  if (role === 'teacher') role = 'professor';
+
+  let allProfiles = [];
+  try {
+    const { data, error } = await sb.from('profiles').select('*');
+    if (!error && Array.isArray(data)) {
+      allProfiles = data.map(p => normalizeAndHealProfile(p, allDisciplinas));
+    }
+  } catch (e) {}
 
   const messages = await getAllMessages(profile);
   const currentUserId = profile.id || `usr-${profile.role}-session`;
   const conversations = [];
 
-  // 1. Canais de Turma (Estritamente filtrados pelos escopos do utilizador)
-  const uniqueScopedTurmas = getUserTurmaScopes(profile);
+  // 1. Canais de Turma (Estritamente filtrados pelos escopos do utilizador; para admin lista as turmas com utilizadores ativos)
+  let uniqueScopedTurmas = getUserTurmaScopes(profile);
+  if (role === 'admin') {
+    const adminScopesMap = new Map();
+    allProfiles.forEach(p => {
+      if (p.is_active === false || p.role === 'admin') return;
+      getUserTurmaScopes(p).forEach(sc => {
+        const key = `${normStr(sc.curso)}|${normStr(sc.classe)}|${normStr(sc.turma)}`;
+        if (!adminScopesMap.has(key)) adminScopesMap.set(key, sc);
+      });
+    });
+    uniqueScopedTurmas = Array.from(adminScopesMap.values());
+  }
 
   uniqueScopedTurmas.forEach(st => {
     const convId = buildTurmaConvId(st.curso, st.classe, st.turma);
@@ -454,23 +488,7 @@ export async function getConversationsListForUser(profile) {
 
   // 2. Conversas Diretas (Aluno <-> Professor estritamente do mesmo Curso, Classe e Turma)
   if (role === 'aluno') {
-    let professores = [];
-    try {
-      const { data, error } = await sb.from('profiles').select('*');
-      if (!error && data) {
-        professores = data.filter(p => ['teacher', 'professor'].includes((p.role || '').toLowerCase()) && p.is_active !== false);
-      }
-    } catch(e) {}
-    
-    professores.forEach(prof => {
-      prof.nome = prof.nome || prof.full_name || 'Professor';
-      prof.cursos = parseArrayField(prof.cursos || prof.curso);
-      prof.classes = parseArrayField(prof.classes || prof.classe);
-      prof.turmas = parseArrayField(prof.turmas || prof.turma).map(t => cleanTurma(t)).filter(Boolean);
-      if (allDisciplinas.length > 0) {
-        enrichTeacherFromDisciplinas(prof, allDisciplinas);
-      }
-    });
+    const professores = allProfiles.filter(p => p.role === 'professor' && p.is_active !== false);
 
     professores.forEach(prof => {
       if (!teacherMatchesStudentScope(prof, profile)) return;
@@ -491,13 +509,17 @@ export async function getConversationsListForUser(profile) {
       ).length;
 
       // Descobrir disciplinas que este professor leciona a esta turma para exibir no subtítulo
-      const profDiscs = Array.isArray(prof.atribuicoes_curriculares)
+      const profDiscsFromAtr = Array.isArray(prof.atribuicoes_curriculares)
         ? prof.atribuicoes_curriculares
-            .filter(a => sameCourse(a.curso, profile.curso) && normStr(a.classe) === normStr(profile.classe) && (a.turmas || []).some(t => normStr(cleanTurma(t)) === normStr(cleanTurma(profile.turma))))
+            .filter(a => sameCourse(a.curso, profile.curso) && normStr(a.classe || '10ª') === normStr(profile.classe || '10ª') && (a.turmas || ['A']).some(t => normStr(cleanTurma(t)) === normStr(cleanTurma(profile.turma || 'A'))))
             .map(a => a.disciplina)
             .filter(d => d && d !== 'Geral')
         : [];
-      const discLabel = profDiscs.length > 0 ? `Docente • ${profDiscs.join(', ')}` : 'Professor da Turma';
+      const fallbackDiscs = parseArrayField(prof.disciplinas || prof.disciplina).filter(d => d && d !== 'Geral');
+      const finalDiscs = profDiscsFromAtr.length > 0 ? profDiscsFromAtr : fallbackDiscs;
+      const discLabel = finalDiscs.length > 0
+        ? `Docente • ${finalDiscs.join(', ')}`
+        : `Professor da Turma (${profile.curso} • ${profile.classe || '10ª'} ${cleanTurma(profile.turma || 'A')})`;
 
       conversations.push({
         id: convId,
@@ -515,18 +537,9 @@ export async function getConversationsListForUser(profile) {
       });
     });
   } else if (role === 'professor') {
-    let alunos = [];
-    try {
-      const { data, error } = await sb.from('profiles').select('*');
-      if (!error && data) {
-        alunos = data.filter(p => ['student', 'aluno'].includes((p.role || '').toLowerCase()) && p.is_active !== false);
-      }
-    } catch(e) {}
+    const alunos = allProfiles.filter(p => p.role === 'aluno' && p.is_active !== false);
 
     alunos.forEach(aluno => {
-      aluno.nome = aluno.nome || aluno.full_name || 'Aluno';
-      if (aluno.turma) aluno.turma = cleanTurma(aluno.turma);
-
       if (!teacherMatchesStudentScope(profile, aluno)) return;
 
       const convId = `direct-${aluno.id}-${currentUserId}`;
@@ -558,6 +571,34 @@ export async function getConversationsListForUser(profile) {
         badge: `${aluno.classe || ''} ${aluno.turma || ''}`.trim(),
         avatar: (aluno.nome || 'A').substring(0, 2).toUpperCase(),
         lastMessage: lastMsg ? (lastMsg.file_name ? `📎 [Ficheiro] ${lastMsg.file_name}` : lastMsg.text) : 'Iniciar conversa direta com aluno...',
+        lastTime: lastMsg ? lastMsg.created_at : null,
+        unreadCount: unreadCount
+      });
+    });
+  } else if (role === 'admin') {
+    allProfiles.filter(p => p.id !== currentUserId && p.is_active !== false).forEach(other => {
+      const convId = `direct-${currentUserId}-${other.id}`;
+      const convMsgs = messages.filter(m => 
+        m.conversation_id === convId || 
+        m.conversation_id === `direct-${other.id}-${currentUserId}` ||
+        (String(m.recipient_id) === String(other.id) && String(m.sender_id) === String(currentUserId)) ||
+        (String(m.recipient_id) === String(currentUserId) && String(m.sender_id) === String(other.id))
+      );
+      const sortedConvMsgs = sortMessagesChronological(convMsgs);
+      const lastMsg = sortedConvMsgs.length > 0 ? sortedConvMsgs[sortedConvMsgs.length - 1] : null;
+      const unreadCount = sortedConvMsgs.filter(m => String(m.sender_id) === String(other.id) && m.read_by_recipient === false).length;
+
+      conversations.push({
+        id: convId,
+        type: 'direct',
+        targetId: other.id,
+        targetName: other.nome,
+        targetRole: other.role,
+        title: other.nome,
+        subtitle: `${other.role === 'professor' ? 'Docente' : 'Aluno'} • ${other.curso || (other.cursos || []).join(', ') || 'Geral'}`,
+        badge: other.role === 'professor' ? 'Professor' : 'Aluno',
+        avatar: (other.nome || 'U').substring(0, 2).toUpperCase(),
+        lastMessage: lastMsg ? (lastMsg.file_name ? `📎 [Ficheiro] ${lastMsg.file_name}` : lastMsg.text) : 'Toque para iniciar mensagem direta (SMS)...',
         lastTime: lastMsg ? lastMsg.created_at : null,
         unreadCount: unreadCount
       });
@@ -595,10 +636,9 @@ export async function getMessagesForConversation(convId, profile) {
     msgs = all.filter(m => {
       if (m.conversation_id === convId) return true;
       if (convId.startsWith('direct-')) {
-        const parts = convId.replace('direct-', '').split('-');
-        if (parts.length >= 2) {
-          const id1 = parts[0];
-          const id2 = parts[1];
+        const ids = parseDirectConvIds(convId);
+        if (ids.length >= 2) {
+          const [id1, id2] = ids;
           return (String(m.sender_id) === String(id1) && String(m.recipient_id) === String(id2)) ||
                  (String(m.sender_id) === String(id2) && String(m.recipient_id) === String(id1)) ||
                  m.conversation_id === `direct-${id1}-${id2}` ||

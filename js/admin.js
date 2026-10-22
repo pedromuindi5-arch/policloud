@@ -1,4 +1,4 @@
-import { sb, createIsolatedClient, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, DISCIPLINAS, getDisciplinasDB, getTurmasDB, getCursosDB, cleanTurma, sameCourse, normStr, enrichTeacherFromDisciplinas } from './sb.js';
+import { sb, createIsolatedClient, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, DISCIPLINAS, getDisciplinasDB, getTurmasDB, getCursosDB, cleanTurma, sameCourse, normStr, enrichTeacherFromDisciplinas, normalizeAndHealProfile } from './sb.js';
 import './theme.js';
 
 function isConfigPlaceholder() { return false; }
@@ -509,11 +509,22 @@ async function fetchAllProfiles() {
         p.disciplinas = parseArr(p.disciplinas || (p.disciplina ? [p.disciplina] : []));
         p.classes = parseArr(p.classes || (p.classe ? [p.classe] : []));
         p.turmas = parseArr(p.turmas || (p.turma ? [p.turma] : [])).map(t => cleanTurma(t)).filter(Boolean);
-        if (allDisciplinasData && allDisciplinasData.length > 0) {
-          enrichTeacherFromDisciplinas(p, allDisciplinasData);
+      }
+      normalizeAndHealProfile(p, allDisciplinasData || []);
+      if (p._needsDbHeal) {
+        const healPayload = {
+          curso: p.curso,
+          classe: p.classe,
+          turma: p.turma
+        };
+        if (isTeacher) {
+          healPayload.cursos = p.cursos || [];
+          healPayload.classes = p.classes || [];
+          healPayload.turmas = p.turmas || [];
+          healPayload.disciplinas = p.disciplinas || [];
+          healPayload.disciplina = (p.disciplinas || []).join(', ') || p.disciplina || null;
         }
-      } else if (p.role === 'student' || p.role === 'aluno') {
-        if (p.turma) p.turma = cleanTurma(p.turma);
+        sb.from('profiles').update(healPayload).eq('id', p.id).then(() => {}).catch(() => {});
       }
       return p;
     });
@@ -1286,18 +1297,28 @@ async function handleCreateUserSubmit(e) {
 
   try {
     const signupClient = createIsolatedClient();
+    const userMetaPayload = {
+      role: role,
+      full_name: nomeCompleto,
+      nome: nomeCompleto,
+      curso: roleUI === 'aluno' ? curso : (teacherCursos.join(', ') || null),
+      classe: roleUI === 'aluno' ? classe : (teacherClasses.join(', ') || null),
+      turma: roleUI === 'aluno' ? turma : (teacherTurmas.join(', ') || null)
+    };
+    if (roleUI === 'professor') {
+      userMetaPayload.cursos = teacherCursos;
+      userMetaPayload.classes = teacherClasses;
+      userMetaPayload.turmas = teacherTurmas;
+      userMetaPayload.disciplinas = teacherDisciplinas;
+      userMetaPayload.disciplina = teacherDisciplinas.join(', ') || null;
+      userMetaPayload.atribuicoes_curriculares = atribuicoesCurriculares;
+    }
+
     const { data, error } = await signupClient.auth.signUp({ 
       email: novoEmail, 
       password: novaSenha,
       options: {
-        data: {
-          role: role,
-          full_name: nomeCompleto,
-          nome: nomeCompleto,
-          curso: roleUI === 'aluno' ? curso : (teacherCursos.join(', ') || null),
-          classe: roleUI === 'aluno' ? classe : (teacherClasses.join(', ') || null),
-          turma: roleUI === 'aluno' ? turma : (teacherTurmas.join(', ') || null)
-        }
+        data: userMetaPayload
       }
     });
 
@@ -1314,21 +1335,21 @@ async function handleCreateUserSubmit(e) {
     }
 
     if (data && data.user) {
+      // Passo 1: Garantir registo em profiles via RPC SECURITY DEFINER (passando user_curso: null para nunca falhar no enum curso_type com cursos novos)
       const rpcPayload = {
         user_id: data.user.id,
         full_name: nomeCompleto,
         user_email: novoEmail,
         user_role: role,
-        user_curso: roleUI === 'aluno' ? curso : (teacherCursos.join(', ') || null),
-        user_classe: roleUI === 'aluno' ? classe : (teacherClasses.join(', ') || null),
-        user_turma: roleUI === 'aluno' ? turma : (teacherTurmas.join(', ') || null)
+        user_curso: null,
+        user_classe: roleUI === 'aluno' ? classe : (teacherClasses[0] || null),
+        user_turma: roleUI === 'aluno' ? turma : (teacherTurmas[0] || null)
       };
 
-      const { error: rpcError } = await sb.rpc('admin_create_user_profile', rpcPayload);
+      await sb.rpc('admin_create_user_profile', rpcPayload);
 
-      // Sempre garantimos que os campos completos (incluindo curso novo, turma limpa, arrays de professor) ficam gravados em profiles
-      const directPayload = {
-        id: data.user.id,
+      // Passo 2: Atualizar diretamente a linha criada com .update() (respeitando RLS de UPDATE e gravando cursos novos em texto)
+      const directUpdatePayload = {
         full_name: nomeCompleto,
         nome: nomeCompleto,
         email: novoEmail,
@@ -1340,23 +1361,22 @@ async function handleCreateUserSubmit(e) {
       };
 
       if (roleUI === 'professor') {
-        directPayload.disciplina = teacherDisciplinas.join(', ') || null;
-        directPayload.cursos = teacherCursos;
-        directPayload.classes = teacherClasses;
-        directPayload.turmas = teacherTurmas;
-        directPayload.disciplinas = teacherDisciplinas;
-        directPayload.atribuicoes_curriculares = atribuicoesCurriculares;
+        directUpdatePayload.disciplina = teacherDisciplinas.join(', ') || null;
+        directUpdatePayload.cursos = teacherCursos;
+        directUpdatePayload.classes = teacherClasses;
+        directUpdatePayload.turmas = teacherTurmas;
+        directUpdatePayload.disciplinas = teacherDisciplinas;
       }
 
       try {
-        const { error: upErr } = await sb.from('profiles').upsert(directPayload);
-        if (upErr && upErr.message && (upErr.message.includes('atribuicoes_curriculares') || upErr.message.includes('nome'))) {
-          delete directPayload.atribuicoes_curriculares;
-          delete directPayload.nome;
-          await sb.from('profiles').upsert(directPayload);
+        const { error: upErr } = await sb.from('profiles').update(directUpdatePayload).eq('id', data.user.id);
+        if (upErr) {
+          await signupClient.from('profiles').update(directUpdatePayload).eq('id', data.user.id);
         }
       } catch (directErr) {
-        console.warn('Direct upsert note:', directErr);
+        try {
+          await signupClient.from('profiles').update(directUpdatePayload).eq('id', data.user.id);
+        } catch (_) {}
       }
 
       if (roleUI === 'professor' && atribuicoesCurriculares.length > 0) {
@@ -1583,24 +1603,8 @@ async function handleEditUserSubmit(e) {
         updatePayload.classes = teacherClasses;
         updatePayload.turmas = teacherTurmas;
         updatePayload.disciplinas = teacherDisciplinas;
-        updatePayload.atribuicoes_curriculares = atribuicoesCurriculares;
       }
-      let error = null;
-      try {
-        const result = await sb.from('profiles').update(updatePayload).eq('id', userId);
-        error = result.error;
-        if (error && error.message && error.message.includes('atribuicoes_curriculares')) {
-          throw error;
-        }
-      } catch (e) {
-        if (e.message && e.message.includes('atribuicoes_curriculares')) {
-          delete updatePayload.atribuicoes_curriculares;
-          const retryResult = await sb.from('profiles').update(updatePayload).eq('id', userId);
-          error = retryResult.error;
-        } else {
-          error = e;
-        }
-      }
+      const { error } = await sb.from('profiles').update(updatePayload).eq('id', userId);
       if (error) throw error;
       if (isProfessor && atribuicoesCurriculares.length > 0) {
         await syncDisciplinasFromTeacherAssignments(userId, nome, atribuicoesCurriculares);
@@ -2200,16 +2204,11 @@ async function syncTeachersProfiles(discNome, turmaPayload, discCurso = null, di
       disciplinas: discs,
       disciplina: discs.join(', ') || null,
       turmas,
-      turma: turmas.join(', ') || null,
-      atribuicoes_curriculares: atrs
+      turma: turmas.join(', ') || null
     };
 
     try {
-      const { error } = await sb.from('profiles').update(updateObj).eq('id', tid);
-      if (error && error.message && error.message.includes('atribuicoes_curriculares')) {
-        delete updateObj.atribuicoes_curriculares;
-        await sb.from('profiles').update(updateObj).eq('id', tid);
-      }
+      await sb.from('profiles').update(updateObj).eq('id', tid);
     } catch (e) {
       console.warn('Sync teacher profile note:', e);
     }
@@ -2887,27 +2886,10 @@ async function handleTeacherAssignmentSubmit(e) {
       classes: selectedClasses,
       classe: selectedClasses.length > 0 ? selectedClasses.join(', ') : null,
       turmas: selectedTurmas,
-      turma: selectedTurmas.length > 0 ? selectedTurmas.join(', ') : null,
-      atribuicoes_curriculares: atribuicoesCurriculares
+      turma: selectedTurmas.length > 0 ? selectedTurmas.join(', ') : null
     };
 
-    let error = null;
-    try {
-      const result = await sb.from('profiles').update(updatePayload).eq('id', teacherId);
-      error = result.error;
-      if (error && error.message && error.message.includes('atribuicoes_curriculares')) {
-        throw error;
-      }
-    } catch (e) {
-      if (e.message && e.message.includes('atribuicoes_curriculares')) {
-        delete updatePayload.atribuicoes_curriculares;
-        const retryResult = await sb.from('profiles').update(updatePayload).eq('id', teacherId);
-        error = retryResult.error;
-      } else {
-        error = e;
-      }
-    }
-
+    const { error } = await sb.from('profiles').update(updatePayload).eq('id', teacherId);
     if (error) throw error;
 
     if (atribuicoesCurriculares.length > 0) {
