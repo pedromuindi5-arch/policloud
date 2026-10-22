@@ -1,4 +1,4 @@
-import { sb, createIsolatedClient, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, DISCIPLINAS, getDisciplinasDB, getTurmasDB } from './sb.js';
+import { sb, createIsolatedClient, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, DISCIPLINAS, getDisciplinasDB, getTurmasDB, getCursosDB, cleanTurma, sameCourse, normStr, enrichTeacherFromDisciplinas } from './sb.js';
 import './theme.js';
 
 function isConfigPlaceholder() { return false; }
@@ -361,33 +361,57 @@ function populateTeacherChips(mode = 'create', currentData = {}) {
   renderMultiSelectChips(turmaGrid, TURMAS, `${pfx}-turma`, currentData.turmas || []);
 }
 
+function getDynamicCursoNames() {
+  if (Array.isArray(window._dynamicCursos) && window._dynamicCursos.length > 0) {
+    return window._dynamicCursos.map(c => typeof c === 'string' ? c : c.nome).filter(Boolean);
+  }
+  return Array.from(CURSOS);
+}
+
 function populateAdminSelects() {
+  const cursosList = getDynamicCursoNames();
   if (filterUserCurso) {
-    filterUserCurso.innerHTML = `<option value="todos">Todos os Cursos</option>` + CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    const prev = filterUserCurso.value;
+    filterUserCurso.innerHTML = `<option value="todos">Todos os Cursos</option>` + cursosList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (prev && (prev === 'todos' || cursosList.includes(prev))) filterUserCurso.value = prev;
   }
   if (inputUserCurso) {
-    inputUserCurso.innerHTML = CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    const prev = inputUserCurso.value;
+    inputUserCurso.innerHTML = cursosList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (prev && cursosList.includes(prev)) inputUserCurso.value = prev;
   }
   if (editUserCurso) {
-    editUserCurso.innerHTML = CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    const prev = editUserCurso.value;
+    editUserCurso.innerHTML = cursosList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (prev && cursosList.includes(prev)) editUserCurso.value = prev;
   }
   if (inputUserClasse) {
+    const prev = inputUserClasse.value;
     inputUserClasse.innerHTML = CLASSES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('');
+    if (prev && CLASSES.includes(prev)) inputUserClasse.value = prev;
   }
   if (editUserClasse) {
+    const prev = editUserClasse.value;
     editUserClasse.innerHTML = CLASSES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('');
+    if (prev && CLASSES.includes(prev)) editUserClasse.value = prev;
   }
 
-  const uniqueTurmas = Array.from(new Set([...TURMAS])).sort();
+  const uniqueTurmas = ['A', 'B', 'C', 'D'];
 
   if (filterUserTurma) {
+    const prev = filterUserTurma.value;
     filterUserTurma.innerHTML = `<option value="todas">Todas as Turmas</option>` + uniqueTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('');
+    if (prev) filterUserTurma.value = prev;
   }
   if (inputUserTurma) {
-    inputUserTurma.innerHTML = uniqueTurmas.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    const prev = inputUserTurma.value;
+    inputUserTurma.innerHTML = uniqueTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('');
+    if (prev && uniqueTurmas.includes(prev)) inputUserTurma.value = prev;
   }
   if (editUserTurma) {
-    editUserTurma.innerHTML = uniqueTurmas.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    const prev = editUserTurma.value;
+    editUserTurma.innerHTML = uniqueTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('');
+    if (prev && uniqueTurmas.includes(prev)) editUserTurma.value = prev;
   }
 
   populateTeacherChips('create');
@@ -479,10 +503,18 @@ async function fetchAllProfiles() {
     if (error) throw error;
     allProfilesData = (data || []).map(p => {
       p.nome = p.nome || p.full_name || '';
-      p.cursos = parseArr(p.cursos || (p.curso ? [p.curso] : []));
-      p.disciplinas = parseArr(p.disciplinas || (p.disciplina ? [p.disciplina] : []));
-      p.classes = parseArr(p.classes || (p.classe ? [p.classe] : []));
-      p.turmas = parseArr(p.turmas || (p.turma ? [p.turma] : []));
+      const isTeacher = (p.role === 'teacher' || p.role === 'professor');
+      if (isTeacher) {
+        p.cursos = parseArr(p.cursos || (p.curso ? [p.curso] : []));
+        p.disciplinas = parseArr(p.disciplinas || (p.disciplina ? [p.disciplina] : []));
+        p.classes = parseArr(p.classes || (p.classe ? [p.classe] : []));
+        p.turmas = parseArr(p.turmas || (p.turma ? [p.turma] : [])).map(t => cleanTurma(t)).filter(Boolean);
+        if (allDisciplinasData && allDisciplinasData.length > 0) {
+          enrichTeacherFromDisciplinas(p, allDisciplinasData);
+        }
+      } else if (p.role === 'student' || p.role === 'aluno') {
+        if (p.turma) p.turma = cleanTurma(p.turma);
+      }
       return p;
     });
     // Limpa cópias locais antigas que causavam números incorrectos
@@ -506,6 +538,7 @@ async function fetchAllProfiles() {
   }
 
   populateAdminSelects();
+  updateAllCourseDropdowns();
   renderUsersTable();
   updateGlobalStats();
 }
@@ -903,7 +936,8 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
   block.className = 'teacher-assignment-block';
   block.style.cssText = 'border: 1px solid var(--color-border-subtle); padding: 16px; border-radius: var(--radius-control); background: var(--color-surface-secondary); position: relative;';
   
-  const cursosOptions = window._dynamicCursos ? window._dynamicCursos.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('') : CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const dynamicCursoNames = getDynamicCursoNames();
+  const cursosOptions = dynamicCursoNames.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 
   block.innerHTML = `
     <button type="button" class="btn-remove-assignment" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: var(--color-danger); cursor: pointer; padding: 4px;" aria-label="Remover">
@@ -912,8 +946,8 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
     
     <div class="form-group-custom" style="margin-bottom: 12px; padding-right: 24px;">
       <label class="form-label-custom" style="font-size: 13px;">Curso</label>
-      <select class="form-input-custom assign-curso" required>
-        <option value="" disabled selected>Selecione o curso</option>
+      <select class="form-input-custom assign-curso">
+        <option value="" selected>-- Sem atribuição agora (definir depois) --</option>
         ${cursosOptions}
       </select>
     </div>
@@ -921,7 +955,7 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
     <div class="form-row-2col" style="margin-bottom: 12px;">
       <div class="form-group-custom" style="margin-bottom: 0;">
         <label class="form-label-custom" style="font-size: 13px;">Classe</label>
-        <select class="form-input-custom assign-classe" required>
+        <select class="form-input-custom assign-classe">
           <option value="10ª" selected>10ª Classe</option>
           <option value="11ª">11ª Classe</option>
           <option value="12ª">12ª Classe</option>
@@ -930,8 +964,8 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
       </div>
       <div class="form-group-custom" style="margin-bottom: 0;">
         <label class="form-label-custom" style="font-size: 13px;">Disciplina</label>
-        <select class="form-input-custom assign-disciplina" required>
-          <option value="" disabled selected>Primeiro selecione o curso</option>
+        <select class="form-input-custom assign-disciplina">
+          <option value="" selected>Primeiro selecione o curso</option>
         </select>
       </div>
     </div>
@@ -961,32 +995,41 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
       disciplinaSelect.innerHTML = '<option value="Projeto / Estágio" selected>Projeto / Estágio</option>';
     } else {
       disciplinaGroup.style.display = 'block';
-      disciplinaSelect.setAttribute('required', 'true');
+      disciplinaSelect.removeAttribute('required');
       if (selectedCurso) {
         const filteredDisciplinas = allDisciplinasData.filter(d => 
-          (d.curso === selectedCurso || !d.curso) &&
-          (d.classe === selectedClasse || d.classe === 'Todas' || !d.classe)
+          sameCourse(d.curso, selectedCurso) &&
+          (normStr(d.classe) === normStr(selectedClasse) || normStr(d.classe) === 'todas' || !d.classe)
         );
         
         if (filteredDisciplinas.length === 0) {
-          disciplinaSelect.innerHTML = '<option value="" disabled selected>Nenhuma disciplina para este filtro</option>';
+          disciplinaSelect.innerHTML = `<option value="Geral" selected>Geral / Disciplinas do Curso (${escapeHtml(selectedCurso)})</option>`;
         } else {
           disciplinaSelect.innerHTML = '<option value="" disabled selected>Selecione a disciplina</option>' + 
-            filteredDisciplinas.map(d => `<option value="${escapeHtml(d.nome)}">${escapeHtml(d.nome)}</option>`).join('');
+            filteredDisciplinas.map(d => `<option value="${escapeHtml(d.nome)}">${escapeHtml(d.nome)}</option>`).join('') +
+            `<option value="Geral">Geral / Todas as Disciplinas</option>`;
         }
       } else {
-        disciplinaSelect.innerHTML = '<option value="" disabled selected>Primeiro selecione o curso</option>';
+        disciplinaSelect.innerHTML = '<option value="" selected>-- Sem disciplina agora --</option>';
       }
     }
     
     // Se recebemos initialData, preenche a disciplina
     if (initialData && initialData.disciplina && !doNotResetTurmas) {
+      const exists = Array.from(disciplinaSelect.options).some(opt => opt.value === initialData.disciplina);
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = initialData.disciplina;
+        opt.textContent = initialData.disciplina;
+        disciplinaSelect.appendChild(opt);
+      }
       disciplinaSelect.value = initialData.disciplina;
     }
     
     // Atualiza turmas
+    const initTurmas = (initialData && Array.isArray(initialData.turmas)) ? initialData.turmas.map(t => cleanTurma(t)) : [];
     if (selectedClasse === '13ª') {
-      const isChecked = (initialData && initialData.turmas && initialData.turmas.includes('Única')) ? 'checked' : (initialData ? '' : 'checked');
+      const isChecked = initTurmas.includes('Única') ? 'checked' : (initialData ? '' : 'checked');
       turmasGrid.innerHTML = `
         <label style="display: flex; align-items: center; gap: 4px; font-size: 13.5px; cursor: pointer; background: var(--color-surface-base); padding: 4px 8px; border: 1px solid var(--color-border-subtle); border-radius: 4px;">
           <input type="checkbox" value="Única" class="assign-turma-checkbox" ${isChecked} /> Turma Única
@@ -994,7 +1037,7 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
       `;
     } else {
       turmasGrid.innerHTML = ['A','B','C','D'].map(t => {
-        const isChecked = (initialData && initialData.turmas && initialData.turmas.includes(t)) ? 'checked' : '';
+        const isChecked = initTurmas.includes(t) ? 'checked' : '';
         return `
         <label style="display: flex; align-items: center; gap: 4px; font-size: 13.5px; cursor: pointer; background: var(--color-surface-base); padding: 4px 8px; border: 1px solid var(--color-border-subtle); border-radius: 4px;">
           <input type="checkbox" value="${t}" class="assign-turma-checkbox" ${isChecked} /> Turma ${t}
@@ -1008,6 +1051,12 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
   classeSelect.addEventListener('change', () => updateBlockDynamicOptions(true));
   
   if (initialData) {
+    if (initialData.curso && !Array.from(cursoSelect.options).some(o => o.value === initialData.curso)) {
+      const opt = document.createElement('option');
+      opt.value = initialData.curso;
+      opt.textContent = initialData.curso;
+      cursoSelect.appendChild(opt);
+    }
     cursoSelect.value = initialData.curso || '';
     classeSelect.value = initialData.classe || '10ª';
   }
@@ -1023,6 +1072,7 @@ function addTeacherAssignmentBlock(containerId, initialData = null) {
 
 function openCreateUserModal() {
   hideCreateUserAlert();
+  updateAllCourseDropdowns();
   if (formCreateUser) formCreateUser.reset();
   selectUserTypeTab('aluno');
   
@@ -1119,6 +1169,42 @@ function hideCreateUserAlert() {
   createUserAlert.innerHTML = '';
 }
 
+async function syncDisciplinasFromTeacherAssignments(teacherId, teacherNome, atribuicoes) {
+  if (!teacherId || !Array.isArray(atribuicoes) || atribuicoes.length === 0) return;
+  for (const atr of atribuicoes) {
+    if (!atr.disciplina || atr.disciplina === 'Geral' || !atr.curso) continue;
+    const matchedDiscs = allDisciplinasData.filter(d =>
+      normStr(d.nome) === normStr(atr.disciplina) &&
+      sameCourse(d.curso, atr.curso) &&
+      (!atr.classe || !d.classe || d.classe === 'Todas' || normStr(d.classe) === normStr(atr.classe))
+    );
+    for (const disc of matchedDiscs) {
+      let turmaMap = {};
+      if (disc.professores_turmas) {
+        if (typeof disc.professores_turmas === 'object') turmaMap = { ...disc.professores_turmas };
+        else if (typeof disc.professores_turmas === 'string') {
+          try { turmaMap = JSON.parse(disc.professores_turmas); } catch (e) {}
+        }
+      }
+      let changed = false;
+      (atr.turmas || []).forEach(t => {
+        const cleanT = cleanTurma(t);
+        const key = cleanT === 'Única' ? 'Turma Única' : `Turma ${cleanT}`;
+        turmaMap[key] = { id: teacherId, nome: teacherNome };
+        changed = true;
+      });
+      if (changed) {
+        disc.professores_turmas = turmaMap;
+        try {
+          await sb.from('disciplinas').update({ professores_turmas: turmaMap }).eq('id', disc.id);
+        } catch (e) {
+          console.warn('Falha ao sincronizar disciplina a partir do professor:', e);
+        }
+      }
+    }
+  }
+}
+
 async function handleCreateUserSubmit(e) {
   e.preventDefault();
   hideCreateUserAlert();
@@ -1130,9 +1216,9 @@ async function handleCreateUserSubmit(e) {
   const role = roleUI === 'aluno' ? 'student' : roleUI === 'professor' ? 'teacher' : roleUI;
   const curso = roleUI === 'aluno' ? inputUserCurso.value : null;
   const classe = roleUI === 'aluno' ? inputUserClasse.value : null;
-  const turma = roleUI === 'aluno' ? inputUserTurma.value : null;
+  const turma = roleUI === 'aluno' ? cleanTurma(inputUserTurma.value) : null;
 
-  // Atribuições Dinâmicas para Professor
+  // Atribuições Dinâmicas para Professor (opcionais na criação para permitir criar professor antes de criar curso/disciplinas)
   let teacherDisciplinas = [];
   let teacherCursos = [];
   let teacherClasses = [];
@@ -1140,12 +1226,7 @@ async function handleCreateUserSubmit(e) {
   let atribuicoesCurriculares = [];
 
   if (roleUI === 'professor') {
-    const blocks = document.querySelectorAll('.teacher-assignment-block');
-    if (blocks.length === 0) {
-      toast('Por favor, adicione pelo menos uma atribuição curricular para o professor.', 'error');
-      return;
-    }
-    
+    const blocks = document.querySelectorAll('#teacher-assignments-container .teacher-assignment-block');
     let hasError = false;
     const disciplinasSet = new Set();
     const cursosSet = new Set();
@@ -1153,28 +1234,23 @@ async function handleCreateUserSubmit(e) {
     const turmasSet = new Set();
 
     blocks.forEach(block => {
-      const disciplina = block.querySelector('.assign-disciplina').value;
-      const curso = block.querySelector('.assign-curso').value;
-      const classe = block.querySelector('.assign-classe').value;
+      const bCurso = (block.querySelector('.assign-curso')?.value || '').trim();
+      const bClasse = (block.querySelector('.assign-classe')?.value || '').trim();
+      const bDisciplina = (block.querySelector('.assign-disciplina')?.value || '').trim();
       const checkboxes = block.querySelectorAll('.assign-turma-checkbox:checked');
       
-      if (!disciplina) {
-        toast('Todas as atribuições devem ter uma disciplina selecionada.', 'error');
-        hasError = true;
-        return;
-      }
-      if (checkboxes.length === 0) {
-        toast('Por favor, selecione pelo menos uma turma em todas as atribuições.', 'error');
-        hasError = true;
-        return;
-      }
-      
-      const turmas = Array.from(checkboxes).map(cb => cb.value);
-      atribuicoesCurriculares.push({ disciplina, curso, classe, turmas });
-      
-      disciplinasSet.add(disciplina);
-      cursosSet.add(curso);
-      classesSet.add(classe);
+      // Se o bloco tem curso selecionado, validamos turmas e disciplina (com fallback para 'Geral')
+      if (!bCurso) return;
+
+      const discVal = bDisciplina || 'Geral';
+      const turmas = checkboxes.length > 0
+        ? Array.from(checkboxes).map(cb => cleanTurma(cb.value))
+        : ['A'];
+
+      atribuicoesCurriculares.push({ disciplina: discVal, curso: bCurso, classe: bClasse || '10ª', turmas });
+      if (discVal !== 'Geral') disciplinasSet.add(discVal);
+      cursosSet.add(bCurso);
+      if (bClasse) classesSet.add(bClasse);
       turmas.forEach(t => turmasSet.add(t));
     });
     
@@ -1208,40 +1284,7 @@ async function handleCreateUserSubmit(e) {
     <span>A criar conta...</span>
   `;
 
-  if (isConfigPlaceholder()) {
-    setTimeout(() => {
-      const demoUser = {
-        id: `usr-demo-${Date.now()}`,
-        nome: nomeCompleto,
-        email: novoEmail,
-        role: roleUI,
-        curso: curso,
-        classe: classe,
-        turma: turma,
-        cursos: teacherCursos,
-        classes: teacherClasses,
-        turmas: teacherTurmas,
-        disciplinas: teacherDisciplinas,
-        is_active: true,
-        created_at: new Date().toISOString()
-      };
-      allProfilesData.unshift(demoUser);
-      renderUsersTable();
-      updateGlobalStats();
-      toast('Conta criada com sucesso (Modo Demonstração).', 'success');
-      if (formCreateUser) formCreateUser.reset();
-      closeCreateUserModal();
-      btnSubmitCreateUser.disabled = false;
-      btnSubmitCreateUser.innerHTML = prevBtnHtml;
-    }, 600);
-    return;
-  }
-
-  let adminSession = null; // Já não é necessário trocar sessões (cliente isolado)
-
   try {
-    // PASSO 1/2 — Cria o utilizador no Auth com um cliente isolado,
-    // mantendo intacta a sessão do administrador.
     const signupClient = createIsolatedClient();
     const { data, error } = await signupClient.auth.signUp({ 
       email: novoEmail, 
@@ -1251,9 +1294,9 @@ async function handleCreateUserSubmit(e) {
           role: role,
           full_name: nomeCompleto,
           nome: nomeCompleto,
-          curso: roleUI === 'aluno' ? curso : null,
-          classe: roleUI === 'aluno' ? classe : null,
-          turma: roleUI === 'aluno' ? turma : null
+          curso: roleUI === 'aluno' ? curso : (teacherCursos.join(', ') || null),
+          classe: roleUI === 'aluno' ? classe : (teacherClasses.join(', ') || null),
+          turma: roleUI === 'aluno' ? turma : (teacherTurmas.join(', ') || null)
         }
       }
     });
@@ -1270,9 +1313,7 @@ async function handleCreateUserSubmit(e) {
       return;
     }
 
-    let rpcSuccess = true;
     if (data && data.user) {
-      // PASSO 3 — Tenta criar o perfil com os campos base e multi-seleção
       const rpcPayload = {
         user_id: data.user.id,
         full_name: nomeCompleto,
@@ -1285,96 +1326,48 @@ async function handleCreateUserSubmit(e) {
 
       const { error: rpcError } = await sb.rpc('admin_create_user_profile', rpcPayload);
 
-      if (rpcError) {
-        console.warn('Tentativa padrão RPC:', rpcError.message);
-        // Fallback: tentar update direto em profiles
-        try {
-          const upsertPayload = {
-            id: data.user.id,
-            full_name: nomeCompleto,
-            email: novoEmail,
-            role: role,
-            curso: roleUI === 'aluno' ? curso : teacherCursos.join(', '),
-            classe: roleUI === 'aluno' ? classe : teacherClasses.join(', '),
-            turma: roleUI === 'aluno' ? turma : teacherTurmas.join(', '),
-            disciplina: roleUI === 'professor' ? teacherDisciplinas.join(', ') : null,
-            cursos: teacherCursos,
-            classes: teacherClasses,
-            turmas: teacherTurmas,
-            disciplinas: teacherDisciplinas,
-            atribuicoes_curriculares: atribuicoesCurriculares,
-            is_active: true
-          };
-          let err = null;
-          try {
-             const { error } = await sb.from('profiles').upsert(upsertPayload);
-             err = error;
-             if (err && err.message && err.message.includes('atribuicoes_curriculares')) throw err;
-          } catch(e) {
-             if (e.message && e.message.includes('atribuicoes_curriculares')) {
-                delete upsertPayload.atribuicoes_curriculares;
-                const { error } = await sb.from('profiles').upsert(upsertPayload);
-                err = error;
-             }
-          }
-          if (err) throw err;
-        } catch (directErr) {
-          console.warn('Direct upsert note:', directErr);
-        }
-      } else if (roleUI === 'professor') {
-        // Update direct array fields if RPC was successful but doesn't handle them
-        try {
-          const profPayload = {
-            disciplina: teacherDisciplinas.join(', '),
-            cursos: teacherCursos,
-            classes: teacherClasses,
-            turmas: teacherTurmas,
-            disciplinas: teacherDisciplinas,
-            atribuicoes_curriculares: atribuicoesCurriculares
-          };
-          let err = null;
-          try {
-            const { error } = await sb.from('profiles').update(profPayload).eq('id', data.user.id);
-            err = error;
-            if (err && err.message && err.message.includes('atribuicoes_curriculares')) throw err;
-          } catch(e) {
-            if (e.message && e.message.includes('atribuicoes_curriculares')) {
-              delete profPayload.atribuicoes_curriculares;
-              const { error } = await sb.from('profiles').update(profPayload).eq('id', data.user.id);
-              err = error;
-            }
-          }
-          if (err) throw err;
-        } catch (updateErr) {
-          console.warn('Direct update note:', updateErr);
-        }
+      // Sempre garantimos que os campos completos (incluindo curso novo, turma limpa, arrays de professor) ficam gravados em profiles
+      const directPayload = {
+        id: data.user.id,
+        full_name: nomeCompleto,
+        nome: nomeCompleto,
+        email: novoEmail,
+        role: role,
+        curso: roleUI === 'aluno' ? curso : (teacherCursos.join(', ') || null),
+        classe: roleUI === 'aluno' ? classe : (teacherClasses.join(', ') || null),
+        turma: roleUI === 'aluno' ? turma : (teacherTurmas.join(', ') || null),
+        is_active: true
+      };
+
+      if (roleUI === 'professor') {
+        directPayload.disciplina = teacherDisciplinas.join(', ') || null;
+        directPayload.cursos = teacherCursos;
+        directPayload.classes = teacherClasses;
+        directPayload.turmas = teacherTurmas;
+        directPayload.disciplinas = teacherDisciplinas;
+        directPayload.atribuicoes_curriculares = atribuicoesCurriculares;
       }
 
-      // Atualiza também localmente para persistência garantida na interface
-      const localNewUser = {
-        id: data.user.id,
-        nome: nomeCompleto,
-        full_name: nomeCompleto,
-        email: novoEmail,
-        role: roleUI,
-        curso: roleUI === 'aluno' ? curso : teacherCursos.join(', '),
-        classe: roleUI === 'aluno' ? classe : teacherClasses.join(', '),
-        turma: roleUI === 'aluno' ? turma : teacherTurmas.join(', '),
-        disciplina: roleUI === 'professor' ? teacherDisciplinas.join(', ') : null,
-        cursos: teacherCursos,
-        classes: teacherClasses,
-        turmas: teacherTurmas,
-        disciplinas: teacherDisciplinas,
-        is_active: true,
-        created_at: new Date().toISOString()
-      };
-      allProfilesData.unshift(localNewUser);
+      try {
+        const { error: upErr } = await sb.from('profiles').upsert(directPayload);
+        if (upErr && upErr.message && (upErr.message.includes('atribuicoes_curriculares') || upErr.message.includes('nome'))) {
+          delete directPayload.atribuicoes_curriculares;
+          delete directPayload.nome;
+          await sb.from('profiles').upsert(directPayload);
+        }
+      } catch (directErr) {
+        console.warn('Direct upsert note:', directErr);
+      }
+
+      if (roleUI === 'professor' && atribuicoesCurriculares.length > 0) {
+        await syncDisciplinasFromTeacherAssignments(data.user.id, nomeCompleto, atribuicoesCurriculares);
+      }
     }
 
-    // PASSO 4 — Confirma sucesso
     if (data && data.user) {
       toast('Conta criada com sucesso.', 'success');
       await log('criar_conta', 'profiles', data.user.id, currentProfile?.nome || '');
+      await fetchAllDisciplinas();
       await fetchAllProfiles();
       await fetchAllLogs();
       if (formCreateUser) formCreateUser.reset();
@@ -1384,17 +1377,6 @@ async function handleCreateUserSubmit(e) {
     console.error('Erro na criação de utilizador:', err);
     toast(err.message || 'Ocorreu um erro ao registar a conta.', 'error');
   } finally {
-    // PASSO 5 — Garantia Obrigatória em Finally: Restaura a sessão do admin
-    if (adminSession) {
-      try {
-        await sb.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token
-        });
-      } catch (sessErr) {
-        console.error('Erro ao restaurar sessão admin:', sessErr);
-      }
-    }
     btnSubmitCreateUser.disabled = false;
     btnSubmitCreateUser.innerHTML = prevBtnHtml;
   }
@@ -1406,6 +1388,7 @@ async function handleCreateUserSubmit(e) {
 function openEditUserModal(userId) {
   if (!modalEditUser) return;
   hideEditUserAlert();
+  updateAllCourseDropdowns();
 
   const user = allProfilesData.find(u => String(u.id) === String(userId));
   if (!user) {
@@ -1424,9 +1407,17 @@ function openEditUserModal(userId) {
   if (roleVal === 'aluno') {
     if (editStudentSpecificFields) {
       editStudentSpecificFields.style.display = 'block';
-      if (editUserCurso) editUserCurso.value = user.curso || CURSOS[0];
+      if (editUserCurso) {
+        if (user.curso && !Array.from(editUserCurso.options).some(o => o.value === user.curso)) {
+          const opt = document.createElement('option');
+          opt.value = user.curso;
+          opt.textContent = user.curso;
+          editUserCurso.appendChild(opt);
+        }
+        editUserCurso.value = user.curso || getDynamicCursoNames()[0] || CURSOS[0];
+      }
       if (editUserClasse) editUserClasse.value = user.classe || CLASSES[0];
-      if (editUserTurma) editUserTurma.value = user.turma || 'INF-10A';
+      if (editUserTurma) editUserTurma.value = cleanTurma(user.turma) || 'A';
     }
     if (editTeacherSpecificFields) editTeacherSpecificFields.style.display = 'none';
   } else if (roleVal === 'professor') {
@@ -1440,18 +1431,15 @@ function openEditUserModal(userId) {
           user.atribuicoes_curriculares.forEach(atr => {
             addTeacherAssignmentBlock('edit-teacher-assignments-container', atr);
           });
+        } else if (user.cursos && user.cursos.length > 0) {
+          addTeacherAssignmentBlock('edit-teacher-assignments-container', {
+            disciplina: (user.disciplinas && user.disciplinas[0]) ? user.disciplinas[0] : 'Geral',
+            curso: user.cursos[0],
+            classe: (user.classes && user.classes[0]) ? user.classes[0] : '10ª',
+            turmas: user.turmas || ['A']
+          });
         } else {
-          // Backward compatibility se não houver atribuicoes_curriculares
-          if (user.disciplinas && user.disciplinas.length > 0) {
-            addTeacherAssignmentBlock('edit-teacher-assignments-container', {
-              disciplina: user.disciplinas[0],
-              curso: user.cursos ? user.cursos[0] : null,
-              classe: user.classes ? user.classes[0] : null,
-              turmas: user.turmas || []
-            });
-          } else {
-             addTeacherAssignmentBlock('edit-teacher-assignments-container');
-          }
+          addTeacherAssignmentBlock('edit-teacher-assignments-container');
         }
       }
     }
@@ -1516,7 +1504,7 @@ async function handleEditUserSubmit(e) {
 
   const curso = isStudent && editUserCurso ? editUserCurso.value : user.curso;
   const classe = isStudent && editUserClasse ? editUserClasse.value : user.classe;
-  const turma = isStudent && editUserTurma ? editUserTurma.value : user.turma;
+  const turma = isStudent && editUserTurma ? cleanTurma(editUserTurma.value) : user.turma;
 
   // Multi-seleção para Professor
   let teacherDisciplinas = user.disciplinas || [];
@@ -1527,12 +1515,6 @@ async function handleEditUserSubmit(e) {
 
   if (isProfessor) {
     const blocks = document.querySelectorAll('#edit-teacher-assignments-container .teacher-assignment-block');
-    if (blocks.length === 0) {
-      showEditUserAlert('Por favor, adicione pelo menos uma atribuição curricular para o professor.');
-      return;
-    }
-    
-    let hasError = false;
     const disciplinasSet = new Set();
     const cursosSet = new Set();
     const classesSet = new Set();
@@ -1540,32 +1522,22 @@ async function handleEditUserSubmit(e) {
     atribuicoesCurriculares = [];
 
     blocks.forEach(block => {
-      const bDisciplina = block.querySelector('.assign-disciplina').value;
-      const bCurso = block.querySelector('.assign-curso').value;
-      const bClasse = block.querySelector('.assign-classe').value;
+      const bCurso = (block.querySelector('.assign-curso')?.value || '').trim();
+      const bClasse = (block.querySelector('.assign-classe')?.value || '').trim();
+      const bDisciplina = (block.querySelector('.assign-disciplina')?.value || '').trim();
       const checkboxes = block.querySelectorAll('.assign-turma-checkbox:checked');
-      
-      if (!bDisciplina) {
-        showEditUserAlert('Todas as atribuições devem ter uma disciplina selecionada.');
-        hasError = true;
-        return;
-      }
-      if (checkboxes.length === 0) {
-        showEditUserAlert('Por favor, selecione pelo menos uma turma em todas as atribuições.');
-        hasError = true;
-        return;
-      }
-      
-      const bTurmas = Array.from(checkboxes).map(cb => cb.value);
-      atribuicoesCurriculares.push({ disciplina: bDisciplina, curso: bCurso, classe: bClasse, turmas: bTurmas });
-      
-      disciplinasSet.add(bDisciplina);
+      if (!bCurso) return;
+
+      const discVal = bDisciplina || 'Geral';
+      const bTurmas = checkboxes.length > 0
+        ? Array.from(checkboxes).map(cb => cleanTurma(cb.value))
+        : ['A'];
+      atribuicoesCurriculares.push({ disciplina: discVal, curso: bCurso, classe: bClasse || '10ª', turmas: bTurmas });
+      if (discVal !== 'Geral') disciplinasSet.add(discVal);
       cursosSet.add(bCurso);
-      classesSet.add(bClasse);
+      if (bClasse) classesSet.add(bClasse);
       bTurmas.forEach(t => turmasSet.add(t));
     });
-    
-    if (hasError) return;
 
     teacherDisciplinas = Array.from(disciplinasSet);
     teacherCursos = Array.from(cursosSet);
@@ -1584,10 +1556,10 @@ async function handleEditUserSubmit(e) {
       ...user,
       nome: nome,
       full_name: nome,
-      curso: isStudent ? curso : teacherCursos.join(', '),
-      classe: isStudent ? classe : teacherClasses.join(', '),
-      turma: isStudent ? turma : teacherTurmas.join(', '),
-      disciplina: isProfessor ? teacherDisciplinas.join(', ') : user.disciplina,
+      curso: isStudent ? curso : (teacherCursos.join(', ') || null),
+      classe: isStudent ? classe : (teacherClasses.join(', ') || null),
+      turma: isStudent ? turma : (teacherTurmas.join(', ') || null),
+      disciplina: isProfessor ? (teacherDisciplinas.join(', ') || null) : user.disciplina,
       cursos: isProfessor ? teacherCursos : user.cursos,
       classes: isProfessor ? teacherClasses : user.classes,
       turmas: isProfessor ? teacherTurmas : user.turmas,
@@ -1596,20 +1568,17 @@ async function handleEditUserSubmit(e) {
       is_active: isActivo
     };
 
-    // 2. Persistir localmente
-    localStorage.setItem('policloud_admin_users', JSON.stringify(allProfilesData));
-
-    // 3. Tentar persistência no Supabase
+    // 2. Persistência no Supabase
     try {
       const updatePayload = {
         full_name: nome,
-        curso: isStudent ? curso : teacherCursos.join(', '),
-        classe: isStudent ? classe : teacherClasses.join(', '),
-        turma: isStudent ? turma : teacherTurmas.join(', '),
+        curso: isStudent ? curso : (teacherCursos.join(', ') || null),
+        classe: isStudent ? classe : (teacherClasses.join(', ') || null),
+        turma: isStudent ? turma : (teacherTurmas.join(', ') || null),
         is_active: isActivo
       };
       if (isProfessor) {
-        updatePayload.disciplina = teacherDisciplinas.join(', ');
+        updatePayload.disciplina = teacherDisciplinas.join(', ') || null;
         updatePayload.cursos = teacherCursos;
         updatePayload.classes = teacherClasses;
         updatePayload.turmas = teacherTurmas;
@@ -1625,7 +1594,6 @@ async function handleEditUserSubmit(e) {
         }
       } catch (e) {
         if (e.message && e.message.includes('atribuicoes_curriculares')) {
-          console.warn("Coluna 'atribuicoes_curriculares' não existe. A guardar sem ela...");
           delete updatePayload.atribuicoes_curriculares;
           const retryResult = await sb.from('profiles').update(updatePayload).eq('id', userId);
           error = retryResult.error;
@@ -1634,8 +1602,11 @@ async function handleEditUserSubmit(e) {
         }
       }
       if (error) throw error;
+      if (isProfessor && atribuicoesCurriculares.length > 0) {
+        await syncDisciplinasFromTeacherAssignments(userId, nome, atribuicoesCurriculares);
+      }
     } catch (sbErr) {
-      console.warn('Persistência remota em profiles offline, guardado no cache local.');
+      console.warn('Persistência remota em profiles:', sbErr);
     }
 
     await log('actualizar_perfil', 'profiles', userId, currentProfile?.nome || '');
@@ -1743,57 +1714,51 @@ function renderNewsTable() {
 // ==========================================
 async function fetchAllCursos() {
   try {
+    await getCursosDB();
     const { data, error } = await sb.from('cursos').select('*').order('nome', { ascending: true });
     if (error) throw error;
-    window._dynamicCursos = data;
+    window._dynamicCursos = data && data.length > 0 ? data : CURSOS.map(c => ({ id: null, nome: c }));
   } catch (err) {
     console.error('Erro ao buscar cursos. Fallback para os base.', err);
     window._dynamicCursos = CURSOS.map(c => ({ id: null, nome: c }));
   }
   
-  // Atualiza todos os dropdowns de cursos espalhados pela UI
   updateAllCourseDropdowns();
 }
 
 function updateAllCourseDropdowns() {
-  if (!window._dynamicCursos) return;
-  const optionsHtml = window._dynamicCursos.map(c => `<option value="${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</option>`).join('');
+  const dynamicCursoNames = getDynamicCursoNames();
+  const optionsHtml = dynamicCursoNames.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const optionsWithAll = `<option value="todos">Todos os Cursos</option>` + optionsHtml;
 
   const userFilter = document.getElementById('filter-user-curso');
   if (userFilter) {
     const val = userFilter.value;
     userFilter.innerHTML = optionsWithAll;
-    userFilter.value = val || 'todos';
+    userFilter.value = (val && (val === 'todos' || dynamicCursoNames.includes(val))) ? val : 'todos';
   }
   
   const discFilter = document.getElementById('filter-disciplina-curso');
   if (discFilter) {
     const val = discFilter.value;
     discFilter.innerHTML = optionsWithAll;
-    discFilter.value = val || 'todos';
+    discFilter.value = (val && (val === 'todos' || dynamicCursoNames.includes(val))) ? val : 'todos';
   }
   
-  const createUserCurso = document.getElementById('create-user-curso');
-  if (createUserCurso) {
-    const val = createUserCurso.value;
-    createUserCurso.innerHTML = optionsHtml;
-    if (val) createUserCurso.value = val;
-  }
-  
-  const createDiscCurso = document.getElementById('create-disc-curso');
-  if (createDiscCurso) {
-    const val = createDiscCurso.value;
-    createDiscCurso.innerHTML = optionsHtml;
-    if (val) createDiscCurso.value = val;
-  }
-  
-  const editDiscCurso = document.getElementById('edit-disc-curso');
-  if (editDiscCurso) {
-    const val = editDiscCurso.value;
-    editDiscCurso.innerHTML = optionsHtml;
-    if (val) editDiscCurso.value = val;
-  }
+  ['input-user-curso', 'create-user-curso', 'edit-user-curso', 'create-disc-curso', 'edit-disc-curso'].forEach(selId => {
+    const el = document.getElementById(selId);
+    if (el) {
+      const val = el.value;
+      el.innerHTML = optionsHtml;
+      if (val && dynamicCursoNames.includes(val)) el.value = val;
+    }
+  });
+
+  document.querySelectorAll('.assign-curso').forEach(sel => {
+    const val = sel.value;
+    sel.innerHTML = `<option value="">-- Sem atribuição agora (definir depois) --</option>` + optionsHtml;
+    if (val && dynamicCursoNames.includes(val)) sel.value = val;
+  });
 }
 
 async function fetchAllDisciplinas() {
@@ -2171,30 +2136,93 @@ function getSelectedTurmaTeachers(prefix) {
   return payload;
 }
 
-async function syncTeachersProfiles(discNome, turmaPayload) {
+async function syncTeachersProfiles(discNome, turmaPayload, discCurso = null, discClasse = null) {
   const teachers = allProfilesData.filter(p => p.role === 'professor' || p.role === 'teacher');
-  for (const [turma, profData] of Object.entries(turmaPayload)) {
+  const teacherTurmasMap = new Map();
+  for (const [turma, profData] of Object.entries(turmaPayload || {})) {
     if (profData && profData.id) {
-      const teacherProfile = teachers.find(t => String(t.id) === String(profData.id));
-      if (teacherProfile) {
-        const discs = Array.isArray(teacherProfile.disciplinas) ? [...teacherProfile.disciplinas] : [];
-        if (!discs.includes(discNome)) discs.push(discNome);
-
-        const turmas = Array.isArray(teacherProfile.turmas) ? [...teacherProfile.turmas] : [];
-        const cleanTurmaLetter = turma.replace(/^Turma\s*/i, '').trim();
-        if (!turmas.includes(cleanTurmaLetter)) turmas.push(cleanTurmaLetter);
-
-        await sb.from('profiles').update({
-          disciplinas: discs,
-          disciplina: discs[0] || null,
-          turmas: turmas,
-          turma: turmas[0] || null
-        }).eq('id', profData.id);
-
-        teacherProfile.disciplinas = discs;
-        teacherProfile.turmas = turmas;
+      const tid = String(profData.id);
+      const cleanT = cleanTurma(turma);
+      if (!teacherTurmasMap.has(tid)) teacherTurmasMap.set(tid, []);
+      if (cleanT && !teacherTurmasMap.get(tid).includes(cleanT)) {
+        teacherTurmasMap.get(tid).push(cleanT);
       }
     }
+  }
+
+  for (const [tid, assignedTurmas] of teacherTurmasMap.entries()) {
+    const teacherProfile = teachers.find(t => String(t.id) === tid);
+    if (!teacherProfile) continue;
+
+    const discs = Array.isArray(teacherProfile.disciplinas) ? [...teacherProfile.disciplinas] : [];
+    if (discNome && !discs.includes(discNome)) discs.push(discNome);
+
+    const cursos = Array.isArray(teacherProfile.cursos) ? [...teacherProfile.cursos] : [];
+    if (discCurso && !cursos.some(c => sameCourse(c, discCurso))) cursos.push(discCurso);
+
+    const classes = Array.isArray(teacherProfile.classes) ? [...teacherProfile.classes] : [];
+    if (discClasse && discClasse !== 'Todas' && !classes.includes(discClasse)) classes.push(discClasse);
+
+    const turmas = Array.isArray(teacherProfile.turmas) ? [...teacherProfile.turmas] : [];
+    assignedTurmas.forEach(t => {
+      if (!turmas.includes(t)) turmas.push(t);
+    });
+
+    const atrs = Array.isArray(teacherProfile.atribuicoes_curriculares)
+      ? teacherProfile.atribuicoes_curriculares.map(a => ({ ...a, turmas: Array.isArray(a.turmas) ? [...a.turmas] : [] }))
+      : [];
+    if (discCurso) {
+      const targetClasse = (discClasse && discClasse !== 'Todas') ? discClasse : '10ª';
+      let existingAtr = atrs.find(a =>
+        normStr(a.disciplina) === normStr(discNome) &&
+        sameCourse(a.curso, discCurso) &&
+        normStr(a.classe) === normStr(targetClasse)
+      );
+      if (existingAtr) {
+        assignedTurmas.forEach(t => {
+          if (!existingAtr.turmas.includes(t)) existingAtr.turmas.push(t);
+        });
+      } else {
+        atrs.push({
+          disciplina: discNome,
+          curso: discCurso,
+          classe: targetClasse,
+          turmas: [...assignedTurmas]
+        });
+      }
+    }
+
+    const updateObj = {
+      cursos,
+      curso: cursos.join(', ') || null,
+      classes,
+      classe: classes.join(', ') || null,
+      disciplinas: discs,
+      disciplina: discs.join(', ') || null,
+      turmas,
+      turma: turmas.join(', ') || null,
+      atribuicoes_curriculares: atrs
+    };
+
+    try {
+      const { error } = await sb.from('profiles').update(updateObj).eq('id', tid);
+      if (error && error.message && error.message.includes('atribuicoes_curriculares')) {
+        delete updateObj.atribuicoes_curriculares;
+        await sb.from('profiles').update(updateObj).eq('id', tid);
+      }
+    } catch (e) {
+      console.warn('Sync teacher profile note:', e);
+    }
+
+    teacherProfile.cursos = cursos;
+    teacherProfile.curso = cursos.join(', ') || null;
+    teacherProfile.classes = classes;
+    teacherProfile.classe = classes.join(', ') || null;
+    teacherProfile.disciplinas = discs;
+    teacherProfile.disciplina = discs.join(', ') || null;
+    teacherProfile.turmas = turmas;
+    teacherProfile.turma = turmas.join(', ') || null;
+    teacherProfile.atribuicoes_curriculares = atrs;
   }
 }
 
@@ -2258,12 +2286,10 @@ if (formManageCourse) {
     
     try {
       if (id) {
-        // Atualizar
         const { error } = await sb.from('cursos').update({ nome }).eq('id', id);
         if (error) throw error;
         toast('Curso atualizado com sucesso!', 'success');
       } else {
-        // Inserir
         const { error } = await sb.from('cursos').insert([{ nome }]);
         if (error) throw error;
         toast('Curso criado com sucesso!', 'success');
@@ -2271,6 +2297,7 @@ if (formManageCourse) {
       
       closeManageCourseModal();
       await fetchAllCursos();
+      populateAdminSelects();
       renderCursosCards();
     } catch (err) {
       console.error(err);
@@ -2311,6 +2338,7 @@ if (btnDeleteCourse) {
       toast('Curso eliminado com sucesso!', 'info');
       closeManageCourseModal();
       await fetchAllCursos();
+      populateAdminSelects();
       renderCursosCards();
     } catch (err) {
       console.error(err);
@@ -2334,7 +2362,6 @@ function openImportDisciplinaModal() {
   }
   
   if (importDiscSelect) {
-    // Populate with unique disciplines (by name)
     const uniqueNames = new Set();
     const uniqueDisciplinas = [];
     allDisciplinasData.forEach(d => {
@@ -2386,7 +2413,6 @@ if (formImportDisciplina) {
     submitBtn.disabled = true;
     
     try {
-      // Create clone object
       const cloneData = {
         nome: sourceDisc.nome,
         codigo: sourceDisc.codigo,
@@ -2404,6 +2430,7 @@ if (formImportDisciplina) {
       
       closeImportDisciplinaModal();
       await fetchAllDisciplinas();
+      renderCursosCards();
     } catch (err) {
       console.error(err);
       if (importDisciplinaAlert) {
@@ -2420,6 +2447,7 @@ if (formImportDisciplina) {
 
 function openCreateDisciplinaModal() {
   if (!modalCreateDisciplina) return;
+  updateAllCourseDropdowns();
   if (formCreateDisciplina) formCreateDisciplina.reset();
   if (createDisciplinaAlert) {
     createDisciplinaAlert.style.display = 'none';
@@ -2470,12 +2498,13 @@ async function handleCreateDisciplinaSubmit(e) {
 
     if (error) throw error;
 
-    await syncTeachersProfiles(nome, professoresTurmas);
+    await syncTeachersProfiles(nome, professoresTurmas, curso, classe);
 
     toast(`Disciplina "${nome}" criada com sucesso!`, 'success');
     await log('CRIAÇÃO DE DISCIPLINA', `Nova disciplina registada: "${nome}" (${curso} - ${classe})`);
     closeCreateDisciplinaModal();
     await fetchAllDisciplinas();
+    renderCursosCards();
     renderUsersTable();
   } catch (err) {
     console.error('Erro ao registar disciplina:', err);
@@ -2492,6 +2521,7 @@ async function handleCreateDisciplinaSubmit(e) {
 function openEditDisciplinaModal(id) {
   const disc = allDisciplinasData.find(d => String(d.id) === String(id));
   if (!disc || !modalEditDisciplina) return;
+  updateAllCourseDropdowns();
 
   if (editDisciplinaAlert) {
     editDisciplinaAlert.style.display = 'none';
@@ -2555,12 +2585,13 @@ async function handleEditDisciplinaSubmit(e) {
 
     if (error) throw error;
 
-    await syncTeachersProfiles(nome, professoresTurmas);
+    await syncTeachersProfiles(nome, professoresTurmas, curso, classe);
 
     toast(`Disciplina "${nome}" actualizada com sucesso!`, 'success');
     await log('EDIÇÃO DE DISCIPLINA', `Disciplina actualizada: "${nome}" (${curso} - ${classe})`);
     closeEditDisciplinaModal();
     await fetchAllDisciplinas();
+    renderCursosCards();
     renderUsersTable();
   } catch (err) {
     console.error('Erro ao actualizar disciplina:', err);
@@ -2591,6 +2622,7 @@ async function deleteDisciplina(id) {
     toast(`Disciplina "${discNome}" removida com sucesso.`, 'info');
     await log('EXCLUSÃO DE DISCIPLINA', `Disciplina eliminada pelo administrador: "${discNome}"`);
     await fetchAllDisciplinas();
+    renderCursosCards();
   } catch (err) {
     console.error('Erro ao excluir disciplina:', err);
     toast(`Erro ao excluir disciplina: ${err.message || 'Falha no banco de dados.'}`, 'error');
@@ -2614,10 +2646,8 @@ function openAssignTurmasModal(disciplinaId) {
   if (discTurmasDiscCursoClasse) discTurmasDiscCursoClasse.textContent = `${disc.curso || 'Tronco Comum'} • ${disc.classe || 'Todas as Classes'}`;
   if (discTurmasDiscCodigo) discTurmasDiscCodigo.textContent = disc.codigo || '—';
 
-  // Obter todos os professores registrados
   const teachers = allProfilesData.filter(p => p.role === 'professor' || p.role === 'teacher');
 
-  // Obter mapa atual de turmas
   let currentTurmaMap = {};
   if (disc.professores_turmas) {
     if (typeof disc.professores_turmas === 'object') {
@@ -2627,7 +2657,6 @@ function openAssignTurmasModal(disciplinaId) {
     }
   }
 
-  // Lista de turmas oficiais da escola
   const turmasList = ['Turma A', 'Turma B', 'Turma C', 'Turma D'];
 
   if (discTurmasInputsContainer) {
@@ -2700,33 +2729,8 @@ async function handleAssignTurmasSubmit(e) {
 
     if (error) throw error;
 
-    // Sincronização bidirecional: atualizar perfis dos professores
-    for (const [turma, profData] of Object.entries(payload)) {
-      if (profData && profData.id) {
-        const teacherProfile = teachers.find(t => String(t.id) === String(profData.id));
-        if (teacherProfile) {
-          const discs = Array.isArray(teacherProfile.disciplinas) ? [...teacherProfile.disciplinas] : [];
-          if (!discs.includes(disc.nome)) discs.push(disc.nome);
+    await syncTeachersProfiles(disc.nome, payload, disc.curso, disc.classe);
 
-          const turmas = Array.isArray(teacherProfile.turmas) ? [...teacherProfile.turmas] : [];
-          const cleanTurmaLetter = turma.replace(/^Turma\s*/i, '').trim();
-          if (!turmas.includes(cleanTurmaLetter)) turmas.push(cleanTurmaLetter);
-
-          // Atualizar profile
-          await sb.from('profiles').update({
-            disciplinas: discs,
-            disciplina: discs[0] || null,
-            turmas: turmas,
-            turma: turmas[0] || null
-          }).eq('id', profData.id);
-
-          teacherProfile.disciplinas = discs;
-          teacherProfile.turmas = turmas;
-        }
-      }
-    }
-
-    // Atualizar no array local allDisciplinasData
     disc.professores_turmas = payload;
 
     toast(`Professores atribuídos às turmas de "${disc.nome}" com sucesso!`, 'success');
@@ -2772,34 +2776,32 @@ function openTeacherAssignmentModal(teacherId) {
         addTeacherAssignmentBlock('assign-teacher-assignments-container', atr);
       });
     } else {
-      // Backward compatibility se não houver atribuicoes_curriculares
       const teacherCursos = Array.isArray(teacher.cursos) ? teacher.cursos : (teacher.curso ? [teacher.curso] : []);
       const teacherDiscs = Array.isArray(teacher.disciplinas) ? teacher.disciplinas : (teacher.disciplina ? [teacher.disciplina] : []);
       const teacherClasses = Array.isArray(teacher.classes) ? teacher.classes : (teacher.classe ? [teacher.classe] : []);
       const teacherTurmas = Array.isArray(teacher.turmas) ? teacher.turmas : (teacher.turma ? [teacher.turma] : []);
       
-      if (teacherDiscs.length > 0) {
+      if (teacherCursos.length > 0 || teacherDiscs.length > 0) {
         addTeacherAssignmentBlock('assign-teacher-assignments-container', {
-          disciplina: teacherDiscs[0],
+          disciplina: teacherDiscs[0] || 'Geral',
           curso: teacherCursos.length > 0 ? teacherCursos[0] : null,
-          classe: teacherClasses.length > 0 ? teacherClasses[0] : null,
+          classe: teacherClasses.length > 0 ? teacherClasses[0] : '10ª',
           turmas: teacherTurmas
         });
       } else {
-         addTeacherAssignmentBlock('assign-teacher-assignments-container');
+        addTeacherAssignmentBlock('assign-teacher-assignments-container');
       }
     }
   }
 
   const assignSummaryText = document.getElementById('assign-summary-text');
   if (assignSummaryText) {
-    assignSummaryText.textContent = `Podes adicionar múltiplas atribuições (turmas e turmas específicas) para este professor.`;
+    assignSummaryText.textContent = `Podes adicionar múltiplas atribuições (cursos, classes e turmas específicas) para este professor.`;
   }
 
   openM('modal-manage-teacher-assignment');
 }
 
-// Disponibilizar globalmente para clique rápido em badges de professor
 window.openTeacherAssignmentModal = openTeacherAssignmentModal;
 
 function closeTeacherAssignmentModal() {
@@ -2845,15 +2847,6 @@ async function handleTeacherAssignmentSubmit(e) {
   if (!activeAssignTeacher) return;
 
   const blocks = document.querySelectorAll('#assign-teacher-assignments-container .teacher-assignment-block');
-  if (blocks.length === 0) {
-    if (teacherAssignmentAlert) {
-      teacherAssignmentAlert.style.display = 'block';
-      teacherAssignmentAlert.textContent = 'Por favor, adicione pelo menos uma atribuição curricular para o professor.';
-    }
-    return;
-  }
-  
-  let hasError = false;
   const disciplinasSet = new Set();
   const cursosSet = new Set();
   const classesSet = new Set();
@@ -2861,44 +2854,29 @@ async function handleTeacherAssignmentSubmit(e) {
   const atribuicoesCurriculares = [];
 
   blocks.forEach(block => {
-    const bDisciplina = block.querySelector('.assign-disciplina').value;
-    const bCurso = block.querySelector('.assign-curso').value;
-    const bClasse = block.querySelector('.assign-classe').value;
+    const bCurso = (block.querySelector('.assign-curso')?.value || '').trim();
+    const bClasse = (block.querySelector('.assign-classe')?.value || '').trim();
+    const bDisciplina = (block.querySelector('.assign-disciplina')?.value || '').trim();
     const checkboxes = block.querySelectorAll('.assign-turma-checkbox:checked');
-    
-    if (!bDisciplina) {
-      if (teacherAssignmentAlert) {
-        teacherAssignmentAlert.style.display = 'block';
-        teacherAssignmentAlert.textContent = 'Todas as atribuições devem ter uma disciplina selecionada.';
-      }
-      hasError = true;
-      return;
-    }
-    if (checkboxes.length === 0) {
-      if (teacherAssignmentAlert) {
-        teacherAssignmentAlert.style.display = 'block';
-        teacherAssignmentAlert.textContent = 'Por favor, selecione pelo menos uma turma em todas as atribuições.';
-      }
-      hasError = true;
-      return;
-    }
-    
-    const bTurmas = Array.from(checkboxes).map(cb => cb.value);
-    atribuicoesCurriculares.push({ disciplina: bDisciplina, curso: bCurso, classe: bClasse, turmas: bTurmas });
-    
-    disciplinasSet.add(bDisciplina);
+    if (!bCurso) return;
+
+    const discVal = bDisciplina || 'Geral';
+    const bTurmas = checkboxes.length > 0
+      ? Array.from(checkboxes).map(cb => cleanTurma(cb.value))
+      : ['A'];
+    atribuicoesCurriculares.push({ disciplina: discVal, curso: bCurso, classe: bClasse || '10ª', turmas: bTurmas });
+    if (discVal !== 'Geral') disciplinasSet.add(discVal);
     cursosSet.add(bCurso);
-    classesSet.add(bClasse);
+    if (bClasse) classesSet.add(bClasse);
     bTurmas.forEach(t => turmasSet.add(t));
   });
-  
-  if (hasError) return;
 
   const selectedCursos = Array.from(cursosSet);
   const selectedDiscs = Array.from(disciplinasSet);
   const selectedClasses = Array.from(classesSet);
   const selectedTurmas = Array.from(turmasSet);
   const teacherId = activeAssignTeacher.id;
+  const teacherNome = activeAssignTeacher.nome || 'Professor';
 
   try {
     const updatePayload = {
@@ -2922,7 +2900,6 @@ async function handleTeacherAssignmentSubmit(e) {
       }
     } catch (e) {
       if (e.message && e.message.includes('atribuicoes_curriculares')) {
-        console.warn("Coluna 'atribuicoes_curriculares' não existe. A guardar sem ela...");
         delete updatePayload.atribuicoes_curriculares;
         const retryResult = await sb.from('profiles').update(updatePayload).eq('id', teacherId);
         error = retryResult.error;
@@ -2933,17 +2910,21 @@ async function handleTeacherAssignmentSubmit(e) {
 
     if (error) throw error;
 
-    // Atualizar no array local allProfilesData
+    if (atribuicoesCurriculares.length > 0) {
+      await syncDisciplinasFromTeacherAssignments(teacherId, teacherNome, atribuicoesCurriculares);
+    }
+
     const profIndex = allProfilesData.findIndex(p => String(p.id) === String(teacherId));
     if (profIndex !== -1) {
       allProfilesData[profIndex] = {
         ...allProfilesData[profIndex],
-        ...updatePayload
+        ...updatePayload,
+        atribuicoes_curriculares: atribuicoesCurriculares
       };
     }
 
-    toast(`Lotação docente de "${activeAssignTeacher.nome}" actualizada com sucesso!`, 'success');
-    await log('LOTAÇÃO DOCENTE', `Lotação configurada para ${activeAssignTeacher.nome}: ${selectedDiscs.length} disciplinas, ${selectedTurmas.length} turmas (${selectedCursos.join(', ') || 'Nenhum curso'})`);
+    toast(`Lotação docente de "${teacherNome}" actualizada com sucesso!`, 'success');
+    await log('LOTAÇÃO DOCENTE', `Lotação configurada para ${teacherNome}: ${selectedDiscs.length} disciplinas, ${selectedTurmas.length} turmas (${selectedCursos.join(', ') || 'Nenhum curso'})`);
     
     closeTeacherAssignmentModal();
     updateDisciplinasMetrics();
@@ -3453,13 +3434,21 @@ async function initAdminPage() {
 
   try {
     await Promise.allSettled([
+      fetchAllCursos(),
+      fetchAllDisciplinas(),
       fetchAllProfiles(),
       fetchRecentNews(),
       fetchStorageAggregation(),
-      fetchAllLogs(),
-      fetchAllCursos(),
-      fetchAllDisciplinas()
+      fetchAllLogs()
     ]);
+    allProfilesData.forEach(p => {
+      if (p.role === 'teacher' || p.role === 'professor') {
+        enrichTeacherFromDisciplinas(p, allDisciplinasData);
+      }
+    });
+    populateAdminSelects();
+    updateAllCourseDropdowns();
+    renderUsersTable();
     updateDisciplinasMetrics();
     renderCursosCards();
     renderDisciplinasTable();

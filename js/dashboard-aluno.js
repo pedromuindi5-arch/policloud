@@ -1,7 +1,7 @@
 // PoliCloud - Intranet Escolar IPPLN
 // Lógica do Dashboard do Aluno (dashboard-aluno.html)
 
-import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, cleanTurma, sameCourse, normStr, downloadStorageFile } from './sb.js';
 import { getStudentAlerts,
   initRealtimeMessages, dismissStudentAlert, dismissPushNotification, markMessagesAsReadForUser } from './messages-service.js';
 import './theme.js';
@@ -99,12 +99,10 @@ async function loadStudentFiles(profile) {
   if (!filesContainer) return;
 
   try {
-    let query = sb
+    const { data: rawFiles, error } = await sb
       .from('files')
-      .select('id, name, file_url, size, curso, classe, turma, created_at')
+      .select('id, name, file_url, size, curso, classe, turma, uploader_id, uploader_role, visibility, created_at')
       .order('created_at', { ascending: false });
-
-    const { data: rawFiles, error } = await query;
 
     if (error) {
       filesContainer.innerHTML = `
@@ -115,14 +113,16 @@ async function loadStudentFiles(profile) {
       return;
     }
 
-    const studentCurso = profile.curso;
-    const studentClasse = profile.classe;
-    const studentTurma = profile.turma;
+    const studentCurso = profile.curso || '';
+    const studentClasse = profile.classe || '';
+    const studentTurma = cleanTurma(profile.turma || '');
 
     const files = (rawFiles || []).filter(file => {
-      if (file.curso && file.curso !== 'Geral' && file.curso !== 'todos' && file.curso !== studentCurso) return false;
-      if (file.classe && file.classe !== 'Geral' && file.classe !== 'todas' && file.classe !== studentClasse) return false;
-      if (file.turma && file.turma !== 'Geral' && file.turma !== 'todas' && file.turma !== studentTurma) return false;
+      if (!studentCurso || !file.curso || !sameCourse(file.curso, studentCurso)) return false;
+      if (studentClasse && file.classe && normStr(file.classe) !== normStr(studentClasse)) return false;
+      if (studentTurma && (!file.turma || normStr(cleanTurma(file.turma)) !== normStr(studentTurma))) return false;
+      const isStudentUpload = file.uploader_role === 'aluno' || file.uploader_role === 'student' || file.visibility === 'professor';
+      if (isStudentUpload && String(file.uploader_id || '') !== String(profile.id || '')) return false;
       return true;
     }).slice(0, 4);
 
@@ -153,16 +153,23 @@ async function loadStudentFiles(profile) {
           </div>
         </div>
         ${file.file_url ? `
-          <a href="${encodeURI(file.file_url)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="Transferir ficheiro" download>
+          <button type="button" class="file-download-link" data-file-url="${escapeHtml(file.file_url)}" data-file-id="${escapeHtml(file.id)}" title="Transferir ficheiro" style="background:none;border:none;cursor:pointer;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-          </a>
+          </button>
         ` : ''}
       </div>
     `).join('');
+
+    filesContainer.querySelectorAll('.file-download-link[data-file-url]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        downloadStorageFile(btn.getAttribute('data-file-url'), btn.getAttribute('data-file-id'), profile.nome);
+      });
+    });
   } catch (err) {
     filesContainer.innerHTML = `
       <div class="state-empty">
@@ -180,12 +187,10 @@ async function loadMuralPreview(profile) {
   if (!muralContainer) return;
 
   try {
-    let query = sb
+    const { data: rawPosts, error } = await sb
       .from('mural_posts')
-      .select('id, author_name, content, curso, classe, turma, created_at')
+      .select('id, author_name, author_role, content, curso, classe, turma, created_at')
       .order('created_at', { ascending: false });
-
-    const { data: rawPosts, error } = await query;
 
     if (error) {
       muralContainer.innerHTML = `
@@ -196,14 +201,20 @@ async function loadMuralPreview(profile) {
       return;
     }
 
-    const studentCurso = profile.curso;
-    const studentClasse = profile.classe;
-    const studentTurma = profile.turma;
+    const studentCurso = profile.curso || '';
+    const studentClasse = profile.classe || '';
+    const studentTurma = cleanTurma(profile.turma || '');
 
     const posts = (rawPosts || []).filter(post => {
-      if (post.curso && post.curso !== 'todos' && post.curso !== 'Geral' && post.curso !== studentCurso) return false;
-      if (post.classe && post.classe !== 'todas' && post.classe !== 'Geral' && post.classe !== studentClasse) return false;
-      if (post.turma && post.turma !== 'todas' && post.turma !== 'Geral' && post.turma !== studentTurma) return false;
+      const pCurso = post.curso && post.curso !== 'todos' && post.curso !== 'Geral' ? post.curso : null;
+      const pClasse = post.classe && post.classe !== 'todas' && post.classe !== 'Geral' ? post.classe : null;
+      const pTurma = post.turma && post.turma !== 'todas' && post.turma !== 'Geral' ? cleanTurma(post.turma) : null;
+      const isAdminGlobal = (post.author_role === 'admin' || (!pCurso && !pClasse && !pTurma && (post.author_name || '').toLowerCase().includes('admin')));
+
+      if (isAdminGlobal && !pCurso && !pClasse && !pTurma) return true;
+      if (!pCurso || !studentCurso || !sameCourse(pCurso, studentCurso)) return false;
+      if (pClasse && studentClasse && normStr(pClasse) !== normStr(studentClasse)) return false;
+      if (pTurma && studentTurma && normStr(pTurma) !== normStr(studentTurma)) return false;
       return true;
     }).slice(0, 3);
 

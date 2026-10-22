@@ -38,6 +38,135 @@ export const DISCIPLINAS = [
   'Organização e Gestão Industrial'
 ];
 
+export function normStr(s) {
+  return (s || '').toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function cleanTurma(t) {
+  if (!t) return '';
+  let s = String(t).trim();
+  if (/^turma\s+/i.test(s)) s = s.replace(/^turma\s+/i, '').trim();
+  if (s.includes('-')) {
+    const match = s.match(/([A-Za-zÀ-ÿ]+)$/);
+    if (match) return match[1].toUpperCase();
+  }
+  return s;
+}
+
+export function sameCourse(c1, c2) {
+  if (!c1 || !c2) return false;
+  const s1 = normStr(c1).replace(/^tecnico de\s+/, '');
+  const s2 = normStr(c2).replace(/^tecnico de\s+/, '');
+  if (s1 === s2) return true;
+  if ((s1 === 'eletricidade' || s1 === 'electricidade') && (s2 === 'eletricidade' || s2 === 'electricidade')) return true;
+  if ((s1 === 'eletronica' || s1 === 'electronica') && (s2 === 'eletronica' || s2 === 'electronica')) return true;
+  return false;
+}
+
+export function parseArrayField(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(v => typeof v === 'string' ? v.trim() : v).filter(Boolean);
+  if (typeof val === 'string') {
+    val = val.trim();
+    if (!val) return [];
+    if (val.startsWith('[') && val.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    if (val.includes(',')) {
+      return val.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [val];
+  }
+  return [];
+}
+
+export function enrichTeacherFromDisciplinas(profile, disciplinasDB = []) {
+  if (!profile) return profile;
+  const r = (profile.role || '').toLowerCase();
+  if (r !== 'professor' && r !== 'teacher') return profile;
+
+  let atrs = [];
+  if (Array.isArray(profile.atribuicoes_curriculares)) {
+    atrs = [...profile.atribuicoes_curriculares];
+  } else if (typeof profile.atribuicoes_curriculares === 'string' && profile.atribuicoes_curriculares.trim().startsWith('[')) {
+    try { atrs = JSON.parse(profile.atribuicoes_curriculares); } catch (e) { atrs = []; }
+  }
+
+  // Enriquecer com atribuições vindas da tabela disciplinas (professores_turmas)
+  if (Array.isArray(disciplinasDB) && disciplinasDB.length > 0) {
+    disciplinasDB.forEach(disc => {
+      if (!disc || !disc.professores_turmas) return;
+      let turmaMap = disc.professores_turmas;
+      if (typeof turmaMap === 'string') {
+        try { turmaMap = JSON.parse(turmaMap); } catch (e) { turmaMap = {}; }
+      }
+      if (!turmaMap || typeof turmaMap !== 'object') return;
+
+      const matchedTurmas = [];
+      Object.entries(turmaMap).forEach(([turmaKey, profVal]) => {
+        if (!profVal) return;
+        const profId = typeof profVal === 'object' ? profVal.id : String(profVal);
+        const profNome = typeof profVal === 'object' ? profVal.nome : '';
+        if (
+          (profile.id && String(profId) === String(profile.id)) ||
+          (profile.nome && profNome && normStr(profNome) === normStr(profile.nome))
+        ) {
+          const letter = cleanTurma(turmaKey);
+          if (letter && !matchedTurmas.includes(letter)) matchedTurmas.push(letter);
+        }
+      });
+
+      if (matchedTurmas.length > 0 && disc.curso) {
+        const existingAtr = atrs.find(a =>
+          sameCourse(a.curso, disc.curso) &&
+          normStr(a.classe || '10ª') === normStr(disc.classe || '10ª') &&
+          normStr(a.disciplina) === normStr(disc.nome)
+        );
+        if (existingAtr) {
+          const tSet = new Set([...(existingAtr.turmas || []).map(cleanTurma), ...matchedTurmas]);
+          existingAtr.turmas = Array.from(tSet);
+        } else {
+          atrs.push({
+            disciplina: disc.nome,
+            curso: disc.curso,
+            classe: disc.classe && disc.classe !== 'Todas' ? disc.classe : '10ª',
+            turmas: matchedTurmas
+          });
+        }
+      }
+    });
+  }
+
+  profile.atribuicoes_curriculares = atrs;
+
+  const cursosSet = new Set(parseArrayField(profile.cursos || profile.curso).filter(c => normStr(c) !== 'geral' && normStr(c) !== 'todos'));
+  const classesSet = new Set(parseArrayField(profile.classes || profile.classe).filter(c => normStr(c) !== 'todas' && normStr(c) !== 'geral'));
+  const turmasSet = new Set(parseArrayField(profile.turmas || profile.turma).map(cleanTurma).filter(t => t && normStr(t) !== 'todas' && normStr(t) !== 'geral'));
+  const discsSet = new Set(parseArrayField(profile.disciplinas || profile.disciplina));
+
+  atrs.forEach(a => {
+    if (a.curso && normStr(a.curso) !== 'geral' && normStr(a.curso) !== 'todos') cursosSet.add(a.curso);
+    if (a.classe && normStr(a.classe) !== 'todas' && normStr(a.classe) !== 'geral') classesSet.add(a.classe);
+    if (a.disciplina) discsSet.add(a.disciplina);
+    if (Array.isArray(a.turmas)) {
+      a.turmas.forEach(t => {
+        const ct = cleanTurma(t);
+        if (ct && normStr(ct) !== 'todas') turmasSet.add(ct);
+      });
+    }
+  });
+
+  profile.cursos = Array.from(cursosSet);
+  profile.classes = Array.from(classesSet);
+  profile.turmas = Array.from(turmasSet);
+  profile.disciplinas = Array.from(discsSet);
+
+  return profile;
+}
+
 export async function getProfile() {
   try {
     const { data } = await sb.auth.getUser();
@@ -59,27 +188,23 @@ export async function getProfile() {
       }
       profile.rolePT = profile.role;
 
-      // Normalização de coleções multi-seleção para Professor
-      const parseArrayField = (val) => {
-        if (!val) return [];
-        if (Array.isArray(val)) return val;
-        if (typeof val === 'string') {
-          val = val.trim();
-          if (val.startsWith('[') && val.endsWith(']')) {
-            try { return JSON.parse(val); } catch (e) {}
-          }
-          if (val.includes(',')) {
-            return val.split(',').map(s => s.trim()).filter(Boolean);
-          }
-          return [val];
+      if (profile.role === 'aluno') {
+        if (profile.turma) {
+          profile.turma = cleanTurma(profile.turma);
         }
-        return [];
-      };
-
-      profile.cursos = parseArrayField(profile.cursos || profile.curso);
-      profile.classes = parseArrayField(profile.classes || profile.classe);
-      profile.turmas = parseArrayField(profile.turmas || profile.turma);
-      profile.disciplinas = parseArrayField(profile.disciplinas || profile.disciplina);
+      } else if (profile.role === 'professor') {
+        let discsDB = [];
+        try {
+          const { data: dData } = await sb.from('disciplinas').select('nome, curso, classe, professores_turmas');
+          if (Array.isArray(dData)) discsDB = dData;
+        } catch (_) {}
+        enrichTeacherFromDisciplinas(profile, discsDB);
+      } else {
+        profile.cursos = parseArrayField(profile.cursos || profile.curso);
+        profile.classes = parseArrayField(profile.classes || profile.classe);
+        profile.turmas = parseArrayField(profile.turmas || profile.turma).map(cleanTurma);
+        profile.disciplinas = parseArrayField(profile.disciplinas || profile.disciplina);
+      }
     }
     return profile;
   } catch (e) {
@@ -106,7 +231,24 @@ export async function requireAuth(roles = null) {
   return p;
 }
 
-export async function signOut() { await sb.auth.signOut(); location.href = 'login.html'; }
+export async function signOut() {
+  try {
+    const keysToRemove = [
+      'policloud_chat_messages',
+      'policloud_demo_files',
+      'policloud_admin_users',
+      'policloud_demo_mural_posts',
+      'policloud_demo_calendar_events',
+      'policloud_demo_mural',
+      'policloud_seen_folders',
+      'policloud_dismissed_push_notifications',
+      'policloud_student_dismissed_notifications'
+    ];
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+  await sb.auth.signOut();
+  location.href = 'login.html';
+}
 
 export async function log(action, entity = null, eid = null, uname = '') {
   const { data:{ user } } = await sb.auth.getUser();
@@ -403,10 +545,25 @@ export function ftIcon(name) {
   return m[e] || [e.toUpperCase()||'FILE','rgba(99,102,241,.15)','#A78BFA'];
 }
 
+export async function getCursosDB() {
+  try {
+    const { data, error } = await sb.from('cursos').select('*').order('nome', { ascending: true });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const names = data.map(c => (c.nome || '').trim()).filter(Boolean);
+      if (names.length > 0) {
+        CURSOS.length = 0;
+        CURSOS.push(...names);
+      }
+      return data;
+    }
+  } catch (e) {}
+  return CURSOS.map(c => ({ id: null, nome: c }));
+}
+
 export async function getDisciplinasDB() {
   try {
     const { data, error } = await sb.from('disciplinas').select('*').order('nome', { ascending: true });
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       return data;
     }
   } catch (e) {}
@@ -423,3 +580,24 @@ export async function getTurmasDB() {
   return TURMAS.map(t => ({ id: t, nome: t, curso: 'Informática', classe: '10ª' }));
 }
 
+export async function downloadStorageFile(storagePath, fileId = null, userName = '') {
+  if (!storagePath) return;
+  if (/^https?:\/\//i.test(storagePath) || storagePath.startsWith('data:')) {
+    window.open(storagePath, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  toast('A preparar download seguro...', 'info');
+  try {
+    const { data, error } = await sb.storage.from('policloud').createSignedUrl(storagePath, 60, {
+      download: true
+    });
+    if (error || !data?.signedUrl) throw error || new Error('URL indisponível');
+    if (fileId) {
+      try { await log('download_ficheiro', 'files', fileId, userName); } catch (_) {}
+    }
+    window.location.href = data.signedUrl;
+  } catch (err) {
+    console.error('Erro ao descarregar ficheiro:', err);
+    toast('Erro ao descarregar ficheiro.', 'error');
+  }
+}

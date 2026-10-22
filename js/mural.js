@@ -1,7 +1,8 @@
 // PoliCloud - Intranet Escolar IPPLN
 // Lógica do Mural de Turma & Calendário Escolar (mural.html)
 
-import { sb, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
+import { sb, getProfile, requireAuth, signOut, log, toast, confirmModal, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, getCursosDB, cleanTurma, sameCourse, normStr } from './sb.js';
+import { getUserTurmaScopes } from './messages-service.js';
 import './theme.js';
 
 function isConfigPlaceholder() { return false; }
@@ -377,49 +378,108 @@ function setupDemoRoleSwitcher(activeRole) {
 }
 
 // ==========================================
+// Isolamento Estrito de Recados e Eventos por Curso / Classe / Turma
+// ==========================================
+function muralItemVisibleToUser(item, profile, selectedTurmaFilter = 'todas') {
+  if (!item || !profile) return false;
+  const role = profile.role;
+
+  const itemCurso = item.curso && item.curso !== 'todos' && item.curso !== 'Geral' ? item.curso : null;
+  const itemClasse = item.classe && item.classe !== 'todas' && item.classe !== 'Geral' ? item.classe : null;
+  const itemTurma = item.turma && item.turma !== 'todas' && item.turma !== 'Geral' ? cleanTurma(item.turma) : null;
+  const isAdminGlobal = (item.author_role === 'admin' || (!itemCurso && !itemClasse && !itemTurma && (item.author_name || '').toLowerCase().includes('admin')));
+
+  if (role === 'admin') {
+    if (selectedTurmaFilter && selectedTurmaFilter !== 'todas') {
+      return !itemTurma || normStr(itemTurma) === normStr(cleanTurma(selectedTurmaFilter));
+    }
+    return true;
+  }
+
+  if (role === 'aluno' || role === 'student') {
+    if (isAdminGlobal && !itemCurso && !itemClasse && !itemTurma) return true;
+
+    const studentCurso = profile.curso || '';
+    const studentClasse = profile.classe || '';
+    const studentTurma = cleanTurma(profile.turma || '');
+
+    // Se não for aviso global da administração, exige correspondência de curso
+    if (!itemCurso || !studentCurso || !sameCourse(itemCurso, studentCurso)) return false;
+    if (itemClasse && studentClasse && normStr(itemClasse) !== normStr(studentClasse)) return false;
+    if (itemTurma && studentTurma && normStr(itemTurma) !== normStr(studentTurma)) return false;
+
+    return true;
+  }
+
+  if (role === 'professor' || role === 'teacher') {
+    if (selectedTurmaFilter && selectedTurmaFilter !== 'todas') {
+      if (itemTurma && normStr(itemTurma) !== normStr(cleanTurma(selectedTurmaFilter))) return false;
+    }
+
+    if ((item.author_id && String(item.author_id) === String(profile.id)) ||
+        (item.created_by && String(item.created_by) === String(profile.id))) {
+      return true;
+    }
+
+    if (isAdminGlobal && !itemCurso && !itemClasse && !itemTurma) return true;
+
+    const scopes = getUserTurmaScopes(profile);
+    if (!scopes || scopes.length === 0) return false;
+
+    return scopes.some(s => {
+      if (itemCurso && s.curso && !sameCourse(itemCurso, s.curso)) return false;
+      if (!itemCurso) return false;
+      if (itemClasse && s.classe && normStr(itemClasse) !== normStr(s.classe)) return false;
+      if (itemTurma && s.turma && normStr(itemTurma) !== normStr(cleanTurma(s.turma))) return false;
+      return true;
+    });
+  }
+
+  return false;
+}
+
+// ==========================================
 // Carregamento de Turmas (Professores e Admin)
 // ==========================================
 async function populateTurmaOptions() {
-  const turmasSet = new Set([...TURMAS]);
-
   try {
-    const { data, error } = await sb
-      .from('profiles')
-      .select('turma')
-      .not('turma', 'is', null);
+    await getCursosDB();
+  } catch (_) {}
 
-    if (!error && data) {
-      data.forEach(p => {
-        if (p.turma && p.turma.trim()) turmasSet.add(p.turma.trim());
-      });
-    }
-  } catch (e) {
-  }
+  const isTeacher = currentProfile && (currentProfile.role === 'professor' || currentProfile.role === 'teacher');
 
-  const sortedTurmas = Array.from(turmasSet).sort();
+  const availableCursos = isTeacher && Array.isArray(currentProfile.cursos) && currentProfile.cursos.length > 0
+    ? currentProfile.cursos
+    : CURSOS;
+  const availableClasses = isTeacher && Array.isArray(currentProfile.classes) && currentProfile.classes.length > 0
+    ? currentProfile.classes
+    : CLASSES;
+  const availableTurmas = isTeacher && Array.isArray(currentProfile.turmas) && currentProfile.turmas.length > 0
+    ? [...new Set(currentProfile.turmas.map(cleanTurma).filter(Boolean))].sort()
+    : [...TURMAS].sort();
 
   // Preenche o seletor do filtro principal
   if (turmaFilterSelect) {
     turmaFilterSelect.innerHTML = `
-      <option value="todas">Todas as Turmas (Geral)</option>
-      ${sortedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
+      <option value="todas">Todas as Minhas Turmas</option>
+      ${availableTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
     `;
   }
 
   // Preenche os seletores nos modais de criação
   const optionsHtml = `
-    ${sortedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
-    <option value="todas">Geral (Todas as Turmas)</option>
+    ${availableTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
+    ${!isTeacher ? '<option value="todas">Geral (Todas as Turmas)</option>' : ''}
   `;
   
   const cursosHtml = `
-    ${CURSOS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
-    <option value="todos">Todos os Cursos</option>
+    ${availableCursos.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+    ${!isTeacher ? '<option value="todos">Todos os Cursos</option>' : ''}
   `;
 
   const classesHtml = `
-    ${CLASSES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('')}
-    <option value="todas">Todas as Classes</option>
+    ${availableClasses.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} Classe</option>`).join('')}
+    ${!isTeacher ? '<option value="todas">Todas as Classes</option>' : ''}
   `;
 
   if (postTurmaSelect) postTurmaSelect.innerHTML = optionsHtml;
@@ -444,75 +504,29 @@ async function loadMuralPosts() {
   `;
 
   let posts = [];
-  const isAluno = currentProfile.role === 'aluno' || currentProfile.role === 'student';
 
-  if (isConfigPlaceholder()) {
-    // Modo de demonstração com dados simulados
-    const allDemoPosts = getLocalDemoPosts();
-    if (isAluno) {
-      const studentCurso = currentProfile.curso;
-      const studentClasse = currentProfile.classe;
-      const studentTurma = currentProfile.turma;
-      posts = allDemoPosts.filter(p => {
-        if (p.curso && p.curso !== 'todos' && p.curso !== 'Geral' && p.curso !== studentCurso) return false;
-        if (p.classe && p.classe !== 'todas' && p.classe !== 'Geral' && p.classe !== studentClasse) return false;
-        if (p.turma && p.turma !== 'todas' && p.turma !== 'Geral' && p.turma !== studentTurma) return false;
-        return true;
-      });
-    } else {
-      if (activeTurmaFilter === 'todas') {
-        posts = allDemoPosts;
-      } else {
-        posts = allDemoPosts.filter(p => !p.turma || p.turma === 'todas' || p.turma === activeTurmaFilter);
-      }
-    }
-  } else {
-    // Consulta Real ao Supabase
-    try {
-      let query = sb
-        .from('mural_posts')
-        .select('*')
-        .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await sb
+      .from('mural_posts')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      const { data, error } = await query;
-      if (error) {
-        throw error;
-      }
-      const rawPosts = data || [];
-
-      if (isAluno) {
-        const studentCurso = currentProfile.curso;
-        const studentClasse = currentProfile.classe;
-        const studentTurma = currentProfile.turma;
-
-        posts = rawPosts.filter(p => {
-          if (p.curso && p.curso !== 'todos' && p.curso !== 'Geral' && p.curso !== studentCurso) return false;
-          if (p.classe && p.classe !== 'todas' && p.classe !== 'Geral' && p.classe !== studentClasse) return false;
-          if (p.turma && p.turma !== 'todas' && p.turma !== 'Geral' && p.turma !== studentTurma) return false;
-          return true;
-        });
-      } else {
-        // Professor / Admin: respeita o filtro selecionado
-        if (activeTurmaFilter && activeTurmaFilter !== 'todas') {
-          posts = rawPosts.filter(p => !p.turma || p.turma === 'todas' || p.turma === activeTurmaFilter);
-        } else {
-          posts = rawPosts;
-        }
-      }
-    } catch (err) {
-      console.error('Erro ao carregar posts do mural:', err);
-      muralPostsContainer.innerHTML = `
-        <div class="state-empty">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span>Não foi possível ligar ao mural de recados de momento.</span>
-        </div>
-      `;
-      return;
-    }
+    if (error) throw error;
+    const rawPosts = data || [];
+    posts = rawPosts.filter(p => muralItemVisibleToUser(p, currentProfile, activeTurmaFilter));
+  } catch (err) {
+    console.error('Erro ao carregar posts do mural:', err);
+    muralPostsContainer.innerHTML = `
+      <div class="state-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Não foi possível ligar ao mural de recados de momento.</span>
+      </div>
+    `;
+    return;
   }
 
   // Separação entre posts fixados no topo e posts normais
@@ -581,10 +595,6 @@ function canManagePost(post) {
   if (currentProfile.role === 'professor') {
     if (post.author_id && post.author_id === currentProfile.id) return true;
     if (post.created_by && post.created_by === currentProfile.id) return true;
-    if (post.author_name && currentProfile.nome && (
-      post.author_name.toLowerCase().includes(currentProfile.nome.toLowerCase()) ||
-      currentProfile.nome.toLowerCase().includes(post.author_name.toLowerCase())
-    )) return true;
     return false;
   }
   return false;
@@ -609,7 +619,11 @@ function renderPostCard(post, isPinned) {
   const authorInitial = authorName.trim()[0].toUpperCase();
   const authorRole = post.author_role || (authorName.toLowerCase().includes('admin') || authorName.toLowerCase().includes('direcção') ? 'admin' : 'professor');
   const roleLabel = authorRole === 'admin' ? 'Administração' : 'Corpo Docente';
-  const turmaTag = post.turma ? `Turma: ${escapeHtml(post.turma)}` : 'Comunicado Geral IPPLN';
+  const destParts = [];
+  if (post.curso && post.curso !== 'todos') destParts.push(post.curso);
+  if (post.classe && post.classe !== 'todas') destParts.push(`${post.classe} Classe`);
+  if (post.turma && post.turma !== 'todas') destParts.push(`Turma ${cleanTurma(post.turma)}`);
+  const turmaTag = destParts.length > 0 ? escapeHtml(destParts.join(' • ')) : 'Comunicado Geral IPPLN';
   const canManage = canManagePost(post);
 
   return `
@@ -680,64 +694,23 @@ async function loadCalendarEvents() {
 
   let events = [];
 
-  const isAluno = currentProfile.role === 'aluno' || currentProfile.role === 'student';
+  try {
+    const { data, error } = await sb
+      .from('calendar_events')
+      .select('*')
+      .order('event_date', { ascending: true });
 
-  if (isConfigPlaceholder()) {
-    const allDemoEvents = getLocalDemoEvents();
-    if (isAluno) {
-      const studentCurso = currentProfile.curso;
-      const studentClasse = currentProfile.classe;
-      const studentTurma = currentProfile.turma;
-      events = allDemoEvents.filter(e => {
-        if (e.curso && e.curso !== 'todos' && e.curso !== 'Geral' && e.curso !== studentCurso) return false;
-        if (e.classe && e.classe !== 'todas' && e.classe !== 'Geral' && e.classe !== studentClasse) return false;
-        if (e.turma && e.turma !== 'todas' && e.turma !== 'Geral' && e.turma !== studentTurma) return false;
-        return true;
-      });
-    } else {
-      if (activeTurmaFilter === 'todas') {
-        events = allDemoEvents;
-      } else {
-        events = allDemoEvents.filter(e => !e.turma || e.turma === 'todas' || e.turma === activeTurmaFilter);
-      }
-    }
-  } else {
-    try {
-      let query = sb
-        .from('calendar_events')
-        .select('*')
-        .order('event_date', { ascending: true });
-
-      const { data, error } = await query;
-      if (error) throw error;
-      const rawEvents = data || [];
-
-      if (isAluno) {
-        const studentCurso = currentProfile.curso;
-        const studentClasse = currentProfile.classe;
-        const studentTurma = currentProfile.turma;
-        events = rawEvents.filter(e => {
-          if (e.curso && e.curso !== 'todos' && e.curso !== 'Geral' && e.curso !== studentCurso) return false;
-          if (e.classe && e.classe !== 'todas' && e.classe !== 'Geral' && e.classe !== studentClasse) return false;
-          if (e.turma && e.turma !== 'todas' && e.turma !== 'Geral' && e.turma !== studentTurma) return false;
-          return true;
-        });
-      } else {
-        if (activeTurmaFilter && activeTurmaFilter !== 'todas') {
-          events = rawEvents.filter(e => !e.turma || e.turma === 'todas' || e.turma === activeTurmaFilter);
-        } else {
-          events = rawEvents;
-        }
-      }
-    } catch (err) {
-      console.error('Erro ao carregar calendário:', err);
-      calendarEventsContainer.innerHTML = `
-        <div class="state-empty">
-          <span>Não foi possível aceder ao calendário escolar de momento.</span>
-        </div>
-      `;
-      return;
-    }
+    if (error) throw error;
+    const rawEvents = data || [];
+    events = rawEvents.filter(e => muralItemVisibleToUser(e, currentProfile, activeTurmaFilter));
+  } catch (err) {
+    console.error('Erro ao carregar calendário:', err);
+    calendarEventsContainer.innerHTML = `
+      <div class="state-empty">
+        <span>Não foi possível aceder ao calendário escolar de momento.</span>
+      </div>
+    `;
+    return;
   }
 
   // Ordena por data (ascendente: os mais próximos no topo)
@@ -1244,11 +1217,16 @@ async function handleCreatePostSubmit(e) {
   `;
 
   try {
-    const targetTurma = turmaValue === 'todas' ? null : turmaValue;
+    const isTeacher = currentProfile && (currentProfile.role === 'professor' || currentProfile.role === 'teacher');
+    const targetTurma = turmaValue === 'todas' ? null : cleanTurma(turmaValue);
     const cursoValue = postCursoSelect ? postCursoSelect.value : null;
-    const targetCurso = cursoValue === 'todos' ? null : cursoValue;
+    const targetCurso = cursoValue === 'todos'
+      ? (isTeacher && Array.isArray(currentProfile.cursos) && currentProfile.cursos.length === 1 ? currentProfile.cursos[0] : null)
+      : cursoValue;
     const classeValue = postClasseSelect ? postClasseSelect.value : null;
-    const targetClasse = classeValue === 'todas' ? null : classeValue;
+    const targetClasse = classeValue === 'todas'
+      ? (isTeacher && Array.isArray(currentProfile.classes) && currentProfile.classes.length === 1 ? currentProfile.classes[0] : null)
+      : classeValue;
 
     if (editingId) {
       if (isConfigPlaceholder()) {
@@ -1375,11 +1353,16 @@ async function handleCreateEventSubmit(e) {
   `;
 
   try {
-    const targetTurma = turmaValue === 'todas' ? null : turmaValue;
+    const isTeacher = currentProfile && (currentProfile.role === 'professor' || currentProfile.role === 'teacher');
+    const targetTurma = turmaValue === 'todas' ? null : cleanTurma(turmaValue);
     const cursoValue = eventCursoSelect ? eventCursoSelect.value : null;
-    const targetCurso = cursoValue === 'todos' ? null : cursoValue;
+    const targetCurso = cursoValue === 'todos'
+      ? (isTeacher && Array.isArray(currentProfile.cursos) && currentProfile.cursos.length === 1 ? currentProfile.cursos[0] : null)
+      : cursoValue;
     const classeValue = eventClasseSelect ? eventClasseSelect.value : null;
-    const targetClasse = classeValue === 'todas' ? null : classeValue;
+    const targetClasse = classeValue === 'todas'
+      ? (isTeacher && Array.isArray(currentProfile.classes) && currentProfile.classes.length === 1 ? currentProfile.classes[0] : null)
+      : classeValue;
 
     if (editingId) {
       if (isConfigPlaceholder()) {

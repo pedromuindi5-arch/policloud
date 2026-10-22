@@ -9,7 +9,8 @@ import {
   markConversationAsRead,
   dismissPushNotification,
   initRealtimeMessages,
-  extractTurmaLetter
+  extractTurmaLetter,
+  messageMatchesTurmaScope
 } from './messages-service.js';
 import './theme.js';
 
@@ -555,7 +556,7 @@ async function initMessagesPage() {
           const isForActive = !newMsg || 
             newMsg.conversation_id === activeConversation.id ||
             (activeConversation.type === 'direct' && (newMsg.sender_id === activeConversation.targetId || newMsg.recipient_id === activeConversation.targetId)) ||
-            (activeConversation.type === 'turma' && extractTurmaLetter(newMsg.turma) === extractTurmaLetter(activeConversation.turma));
+            (activeConversation.type === 'turma' && messageMatchesTurmaScope(newMsg, activeConversation));
 
           if (isForActive && (!newMsg || newMsg.sender_id !== currentProfile.id)) {
              await markConversationAsRead(activeConversation.id, currentProfile);

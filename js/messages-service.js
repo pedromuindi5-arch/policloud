@@ -1,5 +1,5 @@
 // PoliCloud - Serviço Global de Mensagens e Notificações (Estilo NetAcad)
-import { sb, getProfile } from './sb.js';
+import { sb, getProfile, cleanTurma, sameCourse, normStr, parseArrayField, enrichTeacherFromDisciplinas, getDisciplinasDB } from './sb.js';
 
 const STORAGE_MESSAGES_KEY = 'policloud_chat_messages';
 const STORAGE_PUSH_DISMISSED_KEY = 'policloud_dismissed_push_notifications';
@@ -42,9 +42,8 @@ let messagesChannel = null;
 let syncInterval = null;
 
 export function initRealtimeMessages(callback) {
-  if (messagesChannel) return; // already initialized
+  if (messagesChannel) return;
   
-  // 1. WebSocket Oficial (Se o Supabase Realtime estiver ativado na tabela)
   try {
     messagesChannel = sb.channel('public:messages')
       .on(
@@ -59,7 +58,6 @@ export function initRealtimeMessages(callback) {
     console.warn('Realtime channel fallback:', err);
   }
 
-  // 2. Polling de Fallback Invisível (A cada 4 segundos, caso o WebSocket falhe ou não esteja ativo no Dashboard do Supabase)
   if (!syncInterval) {
     syncInterval = setInterval(async () => {
       try {
@@ -67,7 +65,7 @@ export function initRealtimeMessages(callback) {
           .from('messages')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(10); // Busca apenas as 10 mais recentes para ser leve
+          .limit(15);
 
         if (!error && data && data.length > 0) {
           const list = getLocalMessages();
@@ -89,9 +87,7 @@ export function initRealtimeMessages(callback) {
             window.dispatchEvent(new CustomEvent('policloud_chat_updated'));
           }
         }
-      } catch (e) {
-        // Ignora erros silenciosamente
-      }
+      } catch (e) {}
     }, 4000);
   }
 }
@@ -114,14 +110,118 @@ function handleIncomingMessage(newMsg, callback) {
  * Extrai a letra pura da turma (ex: "Turma B" -> "B", "INF-10A" -> "A")
  */
 export function extractTurmaLetter(t) {
-  if (!t) return 'Todas';
-  let s = String(t).toUpperCase().trim();
-  s = s.replace('TURMA ', '');
-  if (s.includes('-')) {
-     const match = s.match(/([A-Z])$/);
-     if (match) return match[1];
+  if (!t) return '';
+  return cleanTurma(t);
+}
+
+/**
+ * Constrói o ID canónico para um canal de turma: turma-<curso>-<classe>-<turma>
+ */
+export function buildTurmaConvId(curso, classe, turma) {
+  const c = (curso || '').toString().trim();
+  const cl = (classe || '').toString().trim();
+  const t = extractTurmaLetter(turma);
+  return `turma-${c}-${cl}-${t}`.replace(/\s+/g, '_').toLowerCase();
+}
+
+/**
+ * Verifica estritamente se uma mensagem pertence a um escopo de turma { curso, classe, turma }
+ */
+export function messageMatchesTurmaScope(msg, scope) {
+  if (!msg || !scope || msg.recipient_id) return false;
+  const targetConvId = buildTurmaConvId(scope.curso, scope.classe, scope.turma);
+  if (msg.conversation_id && normStr(msg.conversation_id) === normStr(targetConvId)) {
+    return true;
   }
-  return s;
+  // Exigir correspondência ESTRITA de curso, classe e turma (sem aceitar mensagens órfãs de outros cursos/anos)
+  if (!msg.curso || !msg.classe || !msg.turma) return false;
+  const sameC = sameCourse(msg.curso, scope.curso);
+  const sameCl = normStr(msg.classe) === normStr(scope.classe);
+  const sameT = normStr(extractTurmaLetter(msg.turma)) === normStr(extractTurmaLetter(scope.turma));
+  return sameC && sameCl && sameT;
+}
+
+/**
+ * Obtém os escopos de turma ({ curso, classe, turma }) exatos de um perfil
+ */
+export function getUserTurmaScopes(profile) {
+  if (!profile) return [];
+  let role = (profile.role || 'aluno').toLowerCase();
+  if (role === 'student') role = 'aluno';
+  if (role === 'teacher') role = 'professor';
+
+  const scopes = [];
+  if (role === 'aluno') {
+    if (profile.curso && profile.classe && profile.turma) {
+      scopes.push({
+        curso: profile.curso.trim(),
+        classe: profile.classe.trim(),
+        turma: extractTurmaLetter(profile.turma)
+      });
+    }
+  } else if (role === 'professor') {
+    if (Array.isArray(profile.atribuicoes_curriculares) && profile.atribuicoes_curriculares.length > 0) {
+      profile.atribuicoes_curriculares.forEach(atr => {
+        if (!atr.curso || atr.curso === 'Geral') return;
+        const c = atr.curso.trim();
+        const cl = (atr.classe && atr.classe !== 'Todas') ? atr.classe.trim() : null;
+        const turmas = Array.isArray(atr.turmas) ? atr.turmas : (atr.turma ? [atr.turma] : []);
+        const classesList = cl ? [cl] : (Array.isArray(profile.classes) && profile.classes.length > 0 ? profile.classes : ['10ª', '11ª', '12ª']);
+        classesList.forEach(classeItem => {
+          turmas.forEach(t => {
+            const cleanT = extractTurmaLetter(t);
+            if (cleanT && cleanT !== 'TODAS') {
+              scopes.push({ curso: c, classe: classeItem, turma: cleanT });
+            }
+          });
+        });
+      });
+    } else {
+      const cArr = parseArrayField(profile.cursos || profile.curso).filter(c => c && normStr(c) !== 'geral' && normStr(c) !== 'todos');
+      const clArr = parseArrayField(profile.classes || profile.classe).filter(cl => cl && normStr(cl) !== 'todas');
+      const tArr = parseArrayField(profile.turmas || profile.turma).map(t => extractTurmaLetter(t)).filter(t => t && normStr(t) !== 'todas');
+      if (cArr.length > 0 && clArr.length > 0 && tArr.length > 0) {
+        cArr.forEach(c => {
+          clArr.forEach(cl => {
+            tArr.forEach(t => {
+              scopes.push({ curso: c, classe: cl, turma: t });
+            });
+          });
+        });
+      }
+    }
+  }
+
+  // Deduplicar
+  const unique = [];
+  const seen = new Set();
+  scopes.forEach(s => {
+    const key = `${normStr(s.curso)}|${normStr(s.classe)}|${normStr(s.turma)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(s);
+    }
+  });
+  return unique;
+}
+
+/**
+ * Verifica se um professor leciona exatamente na turma do aluno ({ curso, classe, turma })
+ */
+export function teacherMatchesStudentScope(profProfile, studentProfile) {
+  if (!profProfile || !studentProfile) return false;
+  if (!studentProfile.curso || !studentProfile.classe || !studentProfile.turma) return false;
+
+  const sCurso = studentProfile.curso;
+  const sClasse = studentProfile.classe;
+  const sTurma = extractTurmaLetter(studentProfile.turma);
+
+  const profScopes = getUserTurmaScopes(profProfile);
+  return profScopes.some(ps =>
+    sameCourse(ps.curso, sCurso) &&
+    normStr(ps.classe) === normStr(sClasse) &&
+    normStr(ps.turma) === normStr(sTurma)
+  );
 }
 
 /**
@@ -133,7 +233,7 @@ function sortMessagesChronological(arr) {
 }
 
 /**
- * Obtém todas as mensagens guardadas (com suporte a estado de leitura por utilizador)
+ * Obtém todas as mensagens relevantes ao utilizador (com isolamento estrito por utilizador/turma)
  */
 export async function getAllMessages(userProfile = null) {
   let list = [];
@@ -143,31 +243,41 @@ export async function getAllMessages(userProfile = null) {
       .select('*')
       .order('created_at', { ascending: true });
 
-    if (!error && Array.isArray(data) && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       list = data;
+      try {
+        localStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(sortMessagesChronological(list)));
+      } catch (e) {}
+    } else {
+      list = getLocalMessages();
     }
   } catch (e) {
-    // Continua para o fallback local
-  }
-
-  if (list.length === 0) {
     list = getLocalMessages();
-  } else {
-    // Sincroniza localmente
-    const local = getLocalMessages();
-    const ids = new Set(list.map(m => m.id));
-    local.forEach(l => {
-      if (!ids.has(l.id)) list.push(l);
-    });
   }
 
-  // Aplica estado de leitura individual do utilizador
+  // Filtrar rigorosamente as mensagens para o utilizador atual, se fornecido
   const userId = userProfile?.id;
-  if (userId) {
+  if (userProfile && userId) {
+    const userScopes = getUserTurmaScopes(userProfile);
     const userReads = getUserReadSet(userId);
+
+    list = list.filter(m => {
+      // 1. Mensagem direta enviada ou recebida por este utilizador
+      if (m.recipient_id) {
+        return String(m.sender_id) === String(userId) || String(m.recipient_id) === String(userId);
+      }
+      if (m.conversation_id && m.conversation_id.startsWith('direct-')) {
+        const parts = m.conversation_id.replace('direct-', '').split('-');
+        return parts.includes(String(userId)) || String(m.sender_id) === String(userId) || String(m.recipient_id) === String(userId);
+      }
+      // 2. Mensagem de canal de turma: apenas se pertencer exatamente a um dos escopos (curso, classe, turma) do utilizador
+      return userScopes.some(sc => messageMatchesTurmaScope(m, sc));
+    });
+
     list = list.map(m => {
-      const isMine = m.sender_id === userId;
-      const isRead = isMine || userReads.has(String(m.id)) || m.read_by_recipient === true;
+      const isMine = String(m.sender_id) === String(userId);
+      const isDirect = Boolean(m.recipient_id) || (m.conversation_id && m.conversation_id.startsWith('direct-'));
+      const isRead = isMine || userReads.has(String(m.id)) || (isDirect && m.read_by_recipient === true);
       return {
         ...m,
         read_by_recipient: isRead
@@ -199,7 +309,6 @@ export function getLocalMessages() {
  * Guarda uma nova mensagem tanto no Supabase como localmente
  */
 export async function saveMessage(messageObj) {
-  // 1. Grava no LocalStorage imediatamente
   const list = getLocalMessages();
   list.push(messageObj);
   const sorted = sortMessagesChronological(list);
@@ -207,10 +316,8 @@ export async function saveMessage(messageObj) {
     localStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(sorted));
   } catch (e) {}
 
-  // 2. Dispara evento local
   window.dispatchEvent(new CustomEvent('policloud_chat_updated', { detail: messageObj }));
 
-  // 3. Tenta gravar no Supabase de forma assíncrona
   try {
     await sb.from('messages').insert({
       id: messageObj.id,
@@ -220,7 +327,7 @@ export async function saveMessage(messageObj) {
       sender_role: messageObj.sender_role,
       recipient_id: messageObj.recipient_id || null,
       recipient_name: messageObj.recipient_name || null,
-      turma: messageObj.turma || null,
+      turma: messageObj.turma ? extractTurmaLetter(messageObj.turma) : null,
       classe: messageObj.classe || null,
       curso: messageObj.curso || null,
       text: messageObj.text,
@@ -231,9 +338,7 @@ export async function saveMessage(messageObj) {
       created_at: messageObj.created_at,
       read_by_recipient: false
     });
-  } catch (e) {
-    // Falha silenciosa no Supabase, garantido via localStorage
-  }
+  } catch (e) {}
 
   return messageObj;
 }
@@ -245,8 +350,11 @@ export async function markConversationAsRead(convId, userProfile) {
   if (!convId || !userProfile) return;
 
   const currentUserId = userProfile.id || `usr-${userProfile.role}-session`;
-  const allMsgs = await getAllMessages();
+  const allMsgs = await getAllMessages(userProfile);
   const readIds = [];
+
+  const userScopes = getUserTurmaScopes(userProfile);
+  const matchedScope = userScopes.find(sc => buildTurmaConvId(sc.curso, sc.classe, sc.turma) === convId);
 
   allMsgs.forEach(m => {
     let isThisConv = m.conversation_id === convId;
@@ -262,13 +370,8 @@ export async function markConversationAsRead(convId, userProfile) {
           isThisConv = true;
         }
       }
-    } else if (!isThisConv && convId.startsWith('turma-')) {
-      const mTurmaLetter = extractTurmaLetter(m.turma);
-      const convParts = convId.replace('turma-', '').split('-');
-      const convLetter = extractTurmaLetter(convParts[convParts.length - 1]);
-      if (mTurmaLetter === convLetter || m.conversation_id === `turma-${mTurmaLetter}` || m.turma === convLetter) {
-        isThisConv = true;
-      }
+    } else if (!isThisConv && matchedScope) {
+      isThisConv = messageMatchesTurmaScope(m, matchedScope);
     }
 
     if (isThisConv) {
@@ -280,103 +383,56 @@ export async function markConversationAsRead(convId, userProfile) {
     markMessagesAsReadForUser(currentUserId, readIds);
   }
 
-  // Atualizar também no Supabase (em background sem travar a navegação)
-  sb.from('messages')
-    .update({ read_by_recipient: true })
-    .eq('conversation_id', convId)
-    .neq('sender_id', currentUserId)
-    .then(() => {})
-    .catch(() => {});
+  // Apenas para conversas diretas atualizamos read_by_recipient na BD (em canais de turma o estado de leitura é individual por aluno/professor)
+  if (convId.startsWith('direct-')) {
+    sb.from('messages')
+      .update({ read_by_recipient: true })
+      .eq('conversation_id', convId)
+      .neq('sender_id', currentUserId)
+      .then(() => {})
+      .catch(() => {});
+  }
 
   window.dispatchEvent(new CustomEvent('policloud_chat_updated'));
 }
 
 /**
- * Gera lista de canais/conversas disponíveis para um dado perfil
+ * Gera lista de canais/conversas disponíveis para um dado perfil (com isolamento estrito Curso + Classe + Turma)
  */
 export async function getConversationsListForUser(profile) {
   if (!profile) return [];
-  const messages = await getAllMessages(profile);
+
   let role = (profile.role || 'aluno').toLowerCase();
   if (role === 'student') role = 'aluno';
   if (role === 'teacher') role = 'professor';
 
+  // Garantir que as disciplinas da BD enriquecem o perfil do professor
+  let allDisciplinas = [];
+  try {
+    allDisciplinas = await getDisciplinasDB();
+  } catch (e) {}
+
+  if (role === 'professor' && allDisciplinas.length > 0) {
+    enrichTeacherFromDisciplinas(profile, allDisciplinas);
+  }
+
+  const messages = await getAllMessages(profile);
   const currentUserId = profile.id || `usr-${profile.role}-session`;
   const conversations = [];
 
-  // 1. Canais de Turma (Gerais / Scoped)
-  let scopedTurmas = []; // { curso, classe, turma }
-
-  if (role === 'aluno') {
-    scopedTurmas.push({
-      curso: profile.curso || 'Geral',
-      classe: profile.classe || 'Todas',
-      turma: profile.turma || 'A'
-    });
-  } else if (role === 'professor') {
-    if (Array.isArray(profile.atribuicoes_curriculares) && profile.atribuicoes_curriculares.length > 0) {
-      profile.atribuicoes_curriculares.forEach(atr => {
-        const c = atr.curso || 'Geral';
-        const cl = atr.classe || 'Todas';
-        const turmas = Array.isArray(atr.turmas) ? atr.turmas : (atr.turma ? [atr.turma] : ['A']);
-        turmas.forEach(t => {
-          scopedTurmas.push({ curso: c, classe: cl, turma: t });
-        });
-      });
-    } else {
-      // Fallback: Cartesian product of legacy arrays
-      const cArr = Array.isArray(profile.cursos) && profile.cursos.length > 0 ? profile.cursos : (profile.curso ? profile.curso.split(',').map(s=>s.trim()) : ['Geral']);
-      const clArr = Array.isArray(profile.classes) && profile.classes.length > 0 ? profile.classes : (profile.classe ? profile.classe.split(',').map(s=>s.trim()) : ['Todas']);
-      const tArr = Array.isArray(profile.turmas) && profile.turmas.length > 0 ? profile.turmas : (profile.turma ? profile.turma.split(',').map(s=>s.trim()) : ['A']);
-      
-      cArr.forEach(c => {
-        clArr.forEach(cl => {
-          tArr.forEach(t => {
-            scopedTurmas.push({ curso: c, classe: cl, turma: t });
-          });
-        });
-      });
-    }
-  } else {
-    // Admin
-    scopedTurmas.push({ curso: 'Geral', classe: 'Todas', turma: 'Geral IPPLN' });
-  }
-
-  // Remover duplicados (caso o professor tenha a mesma turma repetida em diferentes blocos)
-  const uniqueScopedTurmas = [];
-  const seenScopes = new Set();
-  scopedTurmas.forEach(st => {
-    const key = `${st.curso}-${st.classe}-${st.turma}`.toUpperCase();
-    if (!seenScopes.has(key)) {
-      seenScopes.add(key);
-      uniqueScopedTurmas.push(st);
-    }
-  });
+  // 1. Canais de Turma (Estritamente filtrados pelos escopos do utilizador)
+  const uniqueScopedTurmas = getUserTurmaScopes(profile);
 
   uniqueScopedTurmas.forEach(st => {
-    // Identificador único mundial para a turma
-    const convId = `turma-${st.curso}-${st.classe}-${st.turma}`.replace(/\s+/g, '_').toLowerCase();
-    
-    // Título legível exigido pelo utilizador
+    const convId = buildTurmaConvId(st.curso, st.classe, st.turma);
     const title = `${st.curso} • ${st.classe} • Turma ${st.turma}`;
 
-    const turmaMsgs = messages.filter(m => {
-      if (m.recipient_id) return false;
-      if (m.conversation_id === convId) return true;
-      const mLetter = extractTurmaLetter(m.turma);
-      const stLetter = extractTurmaLetter(st.turma);
-      if (mLetter === stLetter) {
-        if (!m.curso || m.curso.toLowerCase() === st.curso.toLowerCase()) {
-          return true;
-        }
-      }
-      return false;
-    });
+    const turmaMsgs = messages.filter(m => messageMatchesTurmaScope(m, st));
     const sortedTurmaMsgs = sortMessagesChronological(turmaMsgs);
     const lastMsg = sortedTurmaMsgs.length > 0 ? sortedTurmaMsgs[sortedTurmaMsgs.length - 1] : null;
 
     const unreadCount = sortedTurmaMsgs.filter(m => 
-      m.sender_id !== currentUserId && 
+      String(m.sender_id) !== String(currentUserId) && 
       m.read_by_recipient === false
     ).length;
 
@@ -396,91 +452,52 @@ export async function getConversationsListForUser(profile) {
     });
   });
 
-  // 2. Conversas Diretas (Aluno <-> Professor)
+  // 2. Conversas Diretas (Aluno <-> Professor estritamente do mesmo Curso, Classe e Turma)
   if (role === 'aluno') {
-    // Buscar todos os professores (com query segura para o enum Postgres)
     let professores = [];
     try {
-      const { data, error } = await sb.from('profiles').select('*').eq('role', 'teacher');
-      if (!error && data && data.length > 0) {
-        professores = data;
-      } else {
-        const res = await sb.from('profiles').select('*');
-        if (res.data) professores = res.data.filter(p => ['teacher', 'professor'].includes((p.role || '').toLowerCase()));
+      const { data, error } = await sb.from('profiles').select('*');
+      if (!error && data) {
+        professores = data.filter(p => ['teacher', 'professor'].includes((p.role || '').toLowerCase()) && p.is_active !== false);
       }
-    } catch(e) {
-      try {
-        const res = await sb.from('profiles').select('*');
-        if (res.data) professores = res.data.filter(p => ['teacher', 'professor'].includes((p.role || '').toLowerCase()));
-      } catch(e2) {}
-    }
+    } catch(e) {}
     
-    // Normalizar nomes
     professores.forEach(prof => {
-       if (!prof.nome && prof.full_name) prof.nome = prof.full_name;
+      prof.nome = prof.nome || prof.full_name || 'Professor';
+      prof.cursos = parseArrayField(prof.cursos || prof.curso);
+      prof.classes = parseArrayField(prof.classes || prof.classe);
+      prof.turmas = parseArrayField(prof.turmas || prof.turma).map(t => cleanTurma(t)).filter(Boolean);
+      if (allDisciplinas.length > 0) {
+        enrichTeacherFromDisciplinas(prof, allDisciplinas);
+      }
     });
 
-    const alunoCurso = profile.curso || 'Informática';
-    const alunoClasse = profile.classe || '12ª';
-    const alunoTurmaRaw = profile.turma || 'A';
-    const alunoTurmaNorm = extractTurmaLetter(alunoTurmaRaw);
-
     professores.forEach(prof => {
-      let matchesContext = false;
-      const norm = (s) => (s || '').toString().toLowerCase().trim();
-      const alunoCursoNorm = norm(alunoCurso);
-      const alunoClasseNorm = norm(alunoClasse);
-      const alunoTurmaNormStr = norm(alunoTurmaNorm);
-
-      const profCursosArray = Array.isArray(prof.cursos) && prof.cursos.length > 0 
-        ? prof.cursos 
-        : (prof.curso ? prof.curso.split(',').map(s=>s.trim()) : ['Geral']);
-      const profCursosNorm = profCursosArray.map(norm);
-        
-      const profClassesArray = Array.isArray(prof.classes) && prof.classes.length > 0 
-        ? prof.classes 
-        : (prof.classe ? prof.classe.split(',').map(s=>s.trim()) : ['Todas']);
-      const profClassesNorm = profClassesArray.map(norm);
-
-      const profTurmasArray = Array.isArray(prof.turmas) && prof.turmas.length > 0 
-        ? prof.turmas 
-        : (prof.turma ? prof.turma.split(',').map(s=>s.trim()) : ['Todas']);
-      const profTurmasNorm = profTurmasArray.map(t => norm(extractTurmaLetter(t)));
-
-      const cursoMatch = profCursosNorm.includes('geral') || profCursosNorm.includes('todos') || profCursosNorm.includes(alunoCursoNorm);
-      const classeMatch = profClassesNorm.includes('todas') || profClassesNorm.includes(alunoClasseNorm);
-      const turmaMatch = profTurmasNorm.includes('todas') || profTurmasNorm.includes(alunoTurmaNormStr);
-
-      if (cursoMatch && classeMatch && turmaMatch) {
-        matchesContext = true;
-      }
-
-      // Se o professor tiver atribuições curriculares complexas, verifica lá dentro também
-      if (!matchesContext && Array.isArray(prof.atribuicoes_curriculares)) {
-         matchesContext = prof.atribuicoes_curriculares.some(atr => {
-           const cMatch = norm(atr.curso) === 'geral' || norm(atr.curso) === alunoCursoNorm;
-           const clMatch = norm(atr.classe) === 'todas' || norm(atr.classe) === alunoClasseNorm;
-           const tMatch = (atr.turmas || []).map(norm).includes('todas') || (atr.turmas || []).some(t => norm(extractTurmaLetter(t)) === alunoTurmaNormStr);
-           return cMatch && clMatch && tMatch;
-         });
-      }
-
-      if (!matchesContext) return; // Ignora o professor
+      if (!teacherMatchesStudentScope(prof, profile)) return;
 
       const convId = `direct-${currentUserId}-${prof.id}`;
       const convMsgs = messages.filter(m => 
         m.conversation_id === convId || 
         m.conversation_id === `direct-${prof.id}-${currentUserId}` ||
-        (m.recipient_id === prof.id && m.sender_id === currentUserId) ||
-        (m.recipient_id === currentUserId && m.sender_id === prof.id)
+        (String(m.recipient_id) === String(prof.id) && String(m.sender_id) === String(currentUserId)) ||
+        (String(m.recipient_id) === String(currentUserId) && String(m.sender_id) === String(prof.id))
       );
       const sortedConvMsgs = sortMessagesChronological(convMsgs);
       const lastMsg = sortedConvMsgs.length > 0 ? sortedConvMsgs[sortedConvMsgs.length - 1] : null;
 
       const unreadCount = sortedConvMsgs.filter(m => 
-        m.sender_id === prof.id && 
+        String(m.sender_id) === String(prof.id) && 
         m.read_by_recipient === false
       ).length;
+
+      // Descobrir disciplinas que este professor leciona a esta turma para exibir no subtítulo
+      const profDiscs = Array.isArray(prof.atribuicoes_curriculares)
+        ? prof.atribuicoes_curriculares
+            .filter(a => sameCourse(a.curso, profile.curso) && normStr(a.classe) === normStr(profile.classe) && (a.turmas || []).some(t => normStr(cleanTurma(t)) === normStr(cleanTurma(profile.turma))))
+            .map(a => a.disciplina)
+            .filter(d => d && d !== 'Geral')
+        : [];
+      const discLabel = profDiscs.length > 0 ? `Docente • ${profDiscs.join(', ')}` : 'Professor da Turma';
 
       conversations.push({
         id: convId,
@@ -489,95 +506,41 @@ export async function getConversationsListForUser(profile) {
         targetName: prof.nome,
         targetRole: 'professor',
         title: prof.nome,
-        subtitle: 'Professor',
+        subtitle: discLabel,
         badge: 'Professor',
-        avatar: (prof.nome || 'P').replace('Prof. ', '').substring(0, 2).toUpperCase(),
+        avatar: (prof.nome || 'P').replace(/^Prof\.?\s*/i, '').substring(0, 2).toUpperCase(),
         lastMessage: lastMsg ? (lastMsg.file_name ? `📎 [Ficheiro] ${lastMsg.file_name}` : lastMsg.text) : 'Toque para iniciar mensagem direta (SMS)...',
         lastTime: lastMsg ? lastMsg.created_at : null,
         unreadCount: unreadCount
       });
     });
   } else if (role === 'professor') {
-    // Buscar alunos (com query segura para o enum Postgres)
     let alunos = [];
     try {
-      const { data, error } = await sb.from('profiles').select('*').eq('role', 'student');
-      if (!error && data && data.length > 0) {
-        alunos = data;
-      } else {
-        const res = await sb.from('profiles').select('*');
-        if (res.data) alunos = res.data.filter(p => ['student', 'aluno'].includes((p.role || '').toLowerCase()));
+      const { data, error } = await sb.from('profiles').select('*');
+      if (!error && data) {
+        alunos = data.filter(p => ['student', 'aluno'].includes((p.role || '').toLowerCase()) && p.is_active !== false);
       }
-    } catch(e) {
-      try {
-        const res = await sb.from('profiles').select('*');
-        if (res.data) alunos = res.data.filter(p => ['student', 'aluno'].includes((p.role || '').toLowerCase()));
-      } catch(e2) {}
-    }
-
-    // Normalizar nomes
-    alunos.forEach(al => {
-       if (!al.nome && al.full_name) al.nome = al.full_name;
-    });
-
-    const norm = (s) => (s || '').toString().toLowerCase().trim();
-
-    const profCursosArray = Array.isArray(profile.cursos) && profile.cursos.length > 0 
-      ? profile.cursos 
-      : (profile.curso ? profile.curso.split(',').map(s=>s.trim()) : ['Geral']);
-    const profCursosNorm = profCursosArray.map(norm);
-      
-    const profClassesArray = Array.isArray(profile.classes) && profile.classes.length > 0 
-      ? profile.classes 
-      : (profile.classe ? profile.classe.split(',').map(s=>s.trim()) : ['Todas']);
-    const profClassesNorm = profClassesArray.map(norm);
-
-    const profTurmasArray = Array.isArray(profile.turmas) && profile.turmas.length > 0 
-      ? profile.turmas 
-      : (profile.turma ? profile.turma.split(',').map(s=>s.trim()) : ['Todas']);
-    const profTurmasNorm = profTurmasArray.map(t => norm(extractTurmaLetter(t)));
+    } catch(e) {}
 
     alunos.forEach(aluno => {
-      // Regra Rígida de Visibilidade para o Professor:
-      let matchesContext = false;
-      const alunoCurso = aluno.curso || 'Informática';
-      const alunoClasse = aluno.classe || '12ª';
-      const alunoTurmaNormStr = norm(extractTurmaLetter(aluno.turma || 'A'));
-      
-      const alunoCursoNorm = norm(alunoCurso);
-      const alunoClasseNorm = norm(alunoClasse);
+      aluno.nome = aluno.nome || aluno.full_name || 'Aluno';
+      if (aluno.turma) aluno.turma = cleanTurma(aluno.turma);
 
-      const cursoMatch = profCursosNorm.includes('geral') || profCursosNorm.includes('todos') || profCursosNorm.includes(alunoCursoNorm);
-      const classeMatch = profClassesNorm.includes('todas') || profClassesNorm.includes(alunoClasseNorm);
-      const turmaMatch = profTurmasNorm.includes('todas') || profTurmasNorm.includes(alunoTurmaNormStr);
-
-      if (cursoMatch && classeMatch && turmaMatch) {
-        matchesContext = true;
-      }
-
-      if (!matchesContext && Array.isArray(profile.atribuicoes_curriculares)) {
-         matchesContext = profile.atribuicoes_curriculares.some(atr => {
-           const cMatch = norm(atr.curso) === 'geral' || norm(atr.curso) === alunoCursoNorm;
-           const clMatch = norm(atr.classe) === 'todas' || norm(atr.classe) === alunoClasseNorm;
-           const tMatch = (atr.turmas || []).map(norm).includes('todas') || (atr.turmas || []).some(t => norm(extractTurmaLetter(t)) === alunoTurmaNormStr);
-           return cMatch && clMatch && tMatch;
-         });
-      }
-
-      if (!matchesContext) return; // Ignorar aluno
+      if (!teacherMatchesStudentScope(profile, aluno)) return;
 
       const convId = `direct-${aluno.id}-${currentUserId}`;
       const convMsgs = messages.filter(m => 
         m.conversation_id === convId || 
         m.conversation_id === `direct-${currentUserId}-${aluno.id}` ||
-        (m.recipient_id === aluno.id && m.sender_id === currentUserId) ||
-        (m.recipient_id === currentUserId && m.sender_id === aluno.id)
+        (String(m.recipient_id) === String(aluno.id) && String(m.sender_id) === String(currentUserId)) ||
+        (String(m.recipient_id) === String(currentUserId) && String(m.sender_id) === String(aluno.id))
       );
       const sortedConvMsgs = sortMessagesChronological(convMsgs);
       const lastMsg = sortedConvMsgs.length > 0 ? sortedConvMsgs[sortedConvMsgs.length - 1] : null;
 
       const unreadCount = sortedConvMsgs.filter(m => 
-        m.sender_id === aluno.id && 
+        String(m.sender_id) === String(aluno.id) && 
         m.read_by_recipient === false
       ).length;
 
@@ -587,9 +550,12 @@ export async function getConversationsListForUser(profile) {
         targetId: aluno.id,
         targetName: aluno.nome,
         targetRole: 'aluno',
+        turma: aluno.turma,
+        curso: aluno.curso,
+        classe: aluno.classe,
         title: aluno.nome,
-        subtitle: `Aluno • Turma ${aluno.turma || 'Geral'} (${aluno.curso || '—'})`,
-        badge: `Turma ${aluno.turma || 'Geral'}`,
+        subtitle: `Aluno • ${aluno.curso || '—'} • ${aluno.classe || '—'} Turma ${aluno.turma || '—'}`,
+        badge: `${aluno.classe || ''} ${aluno.turma || ''}`.trim(),
         avatar: (aluno.nome || 'A').substring(0, 2).toUpperCase(),
         lastMessage: lastMsg ? (lastMsg.file_name ? `📎 [Ficheiro] ${lastMsg.file_name}` : lastMsg.text) : 'Iniciar conversa direta com aluno...',
         lastTime: lastMsg ? lastMsg.created_at : null,
@@ -598,7 +564,6 @@ export async function getConversationsListForUser(profile) {
     });
   }
 
-  // Ordena rigorosamente as conversas com a atividade mais recente no topo!
   conversations.sort((a, b) => {
     const timeA = a.lastTime ? new Date(a.lastTime).getTime() : 0;
     const timeB = b.lastTime ? new Date(b.lastTime).getTime() : 0;
@@ -610,20 +575,21 @@ export async function getConversationsListForUser(profile) {
 
 /**
  * Obtém mensagens de uma conversa específica com ordenação cronológica garantida
- * (Mais antigas no topo, mais recentes no fundo!)
+ * e isolamento estrito de Curso + Classe + Turma
  */
 export async function getMessagesForConversation(convId, profile) {
   const all = await getAllMessages(profile);
   let msgs = [];
   
   if (convId.startsWith('turma-')) {
-    const convParts = convId.replace('turma-', '').split('-');
-    const convLetter = extractTurmaLetter(convParts[convParts.length - 1]);
+    const userScopes = getUserTurmaScopes(profile);
+    const matchedScope = userScopes.find(sc => buildTurmaConvId(sc.curso, sc.classe, sc.turma) === convId);
     msgs = all.filter(m => {
       if (m.recipient_id) return false;
-      if (m.conversation_id === convId) return true;
-      const mLetter = extractTurmaLetter(m.turma);
-      return mLetter === convLetter || m.conversation_id === `turma-${convLetter}`;
+      if (matchedScope) {
+        return messageMatchesTurmaScope(m, matchedScope);
+      }
+      return m.conversation_id === convId;
     });
   } else {
     msgs = all.filter(m => {
@@ -633,20 +599,21 @@ export async function getMessagesForConversation(convId, profile) {
         if (parts.length >= 2) {
           const id1 = parts[0];
           const id2 = parts[1];
-          return (m.sender_id === id1 && m.recipient_id === id2) || (m.sender_id === id2 && m.recipient_id === id1);
+          return (String(m.sender_id) === String(id1) && String(m.recipient_id) === String(id2)) ||
+                 (String(m.sender_id) === String(id2) && String(m.recipient_id) === String(id1)) ||
+                 m.conversation_id === `direct-${id1}-${id2}` ||
+                 m.conversation_id === `direct-${id2}-${id1}`;
         }
       }
       return false;
     });
   }
 
-  // SEMPRE ORDENAR CRONOLOGICAMENTE ASCENDENTE (ANTIGAS -> RECENTES)
   return sortMessagesChronological(msgs);
 }
 
 /**
  * Notificações Push para o Professor (Modal "NOVA MENSAGEM RECEBIDA")
- * Retorna um objeto consolidado de mensagens não lidas
  */
 export async function checkNewMessagePushForTeacher(teacherProfile) {
   const role = (teacherProfile?.role || '').toLowerCase();
@@ -657,17 +624,17 @@ export async function checkNewMessagePushForTeacher(teacherProfile) {
   const dismissedIds = getDismissedPushIds();
   const readSet = getUserReadSet(teacherProfile?.id);
   const all = await getAllMessages(teacherProfile);
-  const teacherId = teacherProfile.id || 'usr-prof-1';
+  const teacherId = teacherProfile.id;
+  const teacherScopes = getUserTurmaScopes(teacherProfile);
 
-  // Filtra mensagens não lidas, direcionadas a este professor, que não foram dispensadas
   const incoming = all.filter(m => {
     if (m.sender_role !== 'aluno' && m.sender_role !== 'student') return false;
     if (m.read_by_recipient === true || readSet.has(String(m.id))) return false;
     if (dismissedIds.includes(m.id)) return false;
     
-    if (m.recipient_id === teacherId) return true;
+    if (String(m.recipient_id) === String(teacherId)) return true;
 
-    if (teacherProfile.turmas && teacherProfile.turmas.some(t => extractTurmaLetter(t) === extractTurmaLetter(m.turma)) && m.conversation_id?.startsWith('turma-')) {
+    if (!m.recipient_id && teacherScopes.some(sc => messageMatchesTurmaScope(m, sc))) {
       return true;
     }
 
@@ -676,7 +643,6 @@ export async function checkNewMessagePushForTeacher(teacherProfile) {
 
   if (incoming.length === 0) return null;
 
-  // Agrega dados: quantos alunos únicos, total de mensagens
   const uniqueStudents = new Set(incoming.map(m => m.sender_id));
   const idsToDismiss = incoming.map(m => m.id);
 
@@ -691,9 +657,6 @@ export async function checkNewMessagePushForTeacher(teacherProfile) {
   };
 }
 
-/**
- * Marca uma ou várias notificações push como dispensadas no modal do professor
- */
 export function dismissPushNotification(messageIds) {
   const ids = Array.isArray(messageIds) ? messageIds : [messageIds];
   const list = getDismissedPushIds();
@@ -722,7 +685,7 @@ function getDismissedPushIds() {
 }
 
 /**
- * Notificações para o Aluno (Novos comunicados, mensagens do professor ou matérias)
+ * Notificações para o Aluno (Novos comunicados, mensagens do professor ou matérias da sua turma exata)
  */
 export async function getStudentAlerts(studentProfile) {
   const role = (studentProfile?.role || '').toLowerCase();
@@ -734,10 +697,8 @@ export async function getStudentAlerts(studentProfile) {
   const dismissed = getDismissedStudentAlerts();
   const readSet = getUserReadSet(studentProfile?.id);
 
-  // 1. Mensagens recentes do professor para este aluno que AINDA NÃO FORAM LIDAS
   const msgs = await getAllMessages(studentProfile);
-  const studentTurma = studentProfile.turma || 'A';
-  const studentTurmaLetter = extractTurmaLetter(studentTurma);
+  const studentScopes = getUserTurmaScopes(studentProfile);
 
   const recentTeacherMsgs = msgs.filter(m => {
     const isTeacher = m.sender_role === 'professor' || m.sender_role === 'teacher';
@@ -745,15 +706,12 @@ export async function getStudentAlerts(studentProfile) {
 
     let isForMe = false;
     if (m.recipient_id) {
-      isForMe = m.recipient_id === studentProfile.id;
+      isForMe = String(m.recipient_id) === String(studentProfile.id);
     } else {
-      const matchTurma = extractTurmaLetter(m.turma) === studentTurmaLetter;
-      const matchCurso = !m.curso || !studentProfile.curso || m.curso.toLowerCase() === 'geral' || m.curso.toLowerCase() === studentProfile.curso.toLowerCase();
-      isForMe = matchTurma && matchCurso;
+      isForMe = studentScopes.some(sc => messageMatchesTurmaScope(m, sc));
     }
     if (!isForMe) return false;
 
-    // Se já foi lida pelo aluno ou se o ID já está dispensado, ignora
     const msgIdStr = String(m.id);
     if (m.read_by_recipient === true || readSet.has(msgIdStr)) return false;
     if (dismissed.includes(msgIdStr) || dismissed.includes(`msg-${msgIdStr}`)) return false;
@@ -768,36 +726,12 @@ export async function getStudentAlerts(studentProfile) {
       id: alertId,
       type: 'mensagem',
       title: 'Nova Mensagem do Professor',
-      description: `${lastTeacherMsg.sender_name}: "${lastTeacherMsg.text.substring(0, 60)}..."`,
+      description: `${lastTeacherMsg.sender_name}: "${(lastTeacherMsg.text || '').substring(0, 60)}..."`,
       link: lastTeacherMsg.conversation_id ? `/mensagens.html?chat=${encodeURIComponent(lastTeacherMsg.conversation_id)}` : '/mensagens.html',
       badge: 'SMS / Chat',
       time: lastTeacherMsg.created_at
     });
   }
-
-  // 2. Novos avisos do mural da sua turma
-  try {
-    const savedMurais = localStorage.getItem('policloud_demo_mural');
-    if (savedMurais) {
-      const murais = JSON.parse(savedMurais);
-      const turmaMurais = murais.filter(m => 
-        (m.turma === studentTurma || !m.turma || m.turma === 'todas') &&
-        !dismissed.includes(`mural-${m.id}`)
-      );
-      if (turmaMurais.length > 0) {
-        const lastMural = turmaMurais[0];
-        alerts.push({
-          id: `mural-${lastMural.id}`,
-          type: 'mural',
-          title: 'Novo Comunicado no Mural da Turma',
-          description: `${lastMural.title || 'Aviso da Turma'}: ${lastMural.content ? lastMural.content.substring(0, 55) + '...' : ''}`,
-          link: '/mural.html',
-          badge: 'Mural',
-          time: lastMural.created_at
-        });
-      }
-    }
-  } catch (e) {}
 
   return alerts;
 }
@@ -822,37 +756,23 @@ function getDismissedStudentAlerts() {
 
 /**
  * Verifica se uma turma tem atividade recente (novo ficheiro ou SMS)
- * Usado para o badge "Novo" pulsante nas pastas da Cloud
  */
-export function turmaHasNewActivity(turmaName) {
+export function turmaHasNewActivity(turmaName, cursoName = null, classeName = null) {
   if (!turmaName) return false;
   const msgs = getLocalMessages();
   const now = Date.now();
   const threeDaysAgo = now - 3 * 24 * 3600 * 1000;
+  const targetTurma = extractTurmaLetter(turmaName);
 
-  // Checa mensagens não lidas ou recentes
   const hasRecentMsg = msgs.some(m => {
-    if (m.turma === turmaName || m.conversation_id === `turma-${turmaName}`) {
+    if (extractTurmaLetter(m.turma) === targetTurma) {
+      if (cursoName && m.curso && !sameCourse(m.curso, cursoName)) return false;
+      if (classeName && m.classe && normStr(m.classe) !== normStr(classeName)) return false;
       const t = new Date(m.created_at).getTime();
       return t >= threeDaysAgo;
     }
     return false;
   });
 
-  if (hasRecentMsg) return true;
-
-  // Checa ficheiros da demo
-  try {
-    const files = JSON.parse(localStorage.getItem('policloud_demo_files') || '[]');
-    const hasRecentFile = files.some(f => {
-      if (f.turma === turmaName) {
-        const t = new Date(f.created_at).getTime();
-        return t >= threeDaysAgo;
-      }
-      return false;
-    });
-    if (hasRecentFile) return true;
-  } catch (e) {}
-
-  return false;
+  return hasRecentMsg;
 }

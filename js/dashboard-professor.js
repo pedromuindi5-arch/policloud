@@ -1,10 +1,12 @@
 // PoliCloud - Intranet Escolar IPPLN
 // Lógica do Dashboard do Professor (dashboard-professor.html)
 
-import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS } from './sb.js';
-import { checkNewMessagePushForTeacher,
+import { sb, getProfile, requireAuth, signOut, log, toast, initials, fDate, openM, closeM, initSidebar, mouseTrack, ftIcon, CURSOS, CLASSES, TURMAS, cleanTurma, sameCourse, normStr, downloadStorageFile } from './sb.js';
+import { checkNewMessagePushForTeacher, getUserTurmaScopes,
   initRealtimeMessages, dismissPushNotification, markMessagesAsReadForUser } from './messages-service.js';
 import './theme.js';
+
+let currentTeacherProfile = null;
 
 // Elementos do DOM
 const sessionOverlay = document.getElementById('session-check-overlay');
@@ -56,6 +58,36 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function matchesTeacherScope(item, profile, selectedTurma = 'todas') {
+  if (!item || !profile) return false;
+  const itemCurso = item.curso && item.curso !== 'todos' && item.curso !== 'Geral' ? item.curso : null;
+  const itemClasse = item.classe && item.classe !== 'todas' && item.classe !== 'Geral' ? item.classe : null;
+  const itemTurma = item.turma && item.turma !== 'todas' && item.turma !== 'Geral' ? cleanTurma(item.turma) : null;
+
+  if (selectedTurma && selectedTurma !== 'todas') {
+    if (itemTurma && normStr(itemTurma) !== normStr(cleanTurma(selectedTurma))) return false;
+  }
+
+  if ((item.author_id && String(item.author_id) === String(profile.id)) ||
+      (item.created_by && String(item.created_by) === String(profile.id)) ||
+      (item.uploader_id && String(item.uploader_id) === String(profile.id))) {
+    return true;
+  }
+
+  const isAdminGlobal = (item.author_role === 'admin' || (!itemCurso && !itemClasse && !itemTurma && (item.author_name || '').toLowerCase().includes('admin')));
+  if (isAdminGlobal && !itemCurso && !itemClasse && !itemTurma) return true;
+
+  const scopes = getUserTurmaScopes(profile);
+  if (!scopes || scopes.length === 0) return false;
+
+  return scopes.some(s => {
+    if (!itemCurso || (s.curso && !sameCourse(itemCurso, s.curso))) return false;
+    if (itemClasse && s.classe && normStr(itemClasse) !== normStr(s.classe)) return false;
+    if (itemTurma && s.turma && normStr(itemTurma) !== normStr(cleanTurma(s.turma))) return false;
+    return true;
+  });
+}
+
 /**
  * Atualiza os parâmetros de URL nos atalhos rápidos de acordo com a turma selecionada
  * @param {string} selectedTurma 
@@ -76,37 +108,18 @@ function updateShortcutLinks(selectedTurma) {
 }
 
 /**
- * Carrega a lista de turmas para o seletor a partir dos arrays padrão e registos da base de dados
+ * Carrega a lista de turmas atribuídas ao professor
  */
 async function loadTurmasList(profile = null) {
   if (!turmaSelect) return;
 
-  const teacherAssignedTurmas = profile && profile.turmas && profile.turmas.length > 0 ? profile.turmas : null;
-  const turmasSet = new Set(teacherAssignedTurmas ? teacherAssignedTurmas : TURMAS);
+  const teacherAssignedTurmas = profile && Array.isArray(profile.turmas) && profile.turmas.length > 0
+    ? [...new Set(profile.turmas.map(cleanTurma).filter(Boolean))].sort()
+    : [];
 
-  if (!teacherAssignedTurmas) {
-    try {
-      const { data: profiles, error } = await sb
-        .from('profiles')
-        .select('turma')
-        .not('turma', 'is', null);
-
-      if (!error && profiles) {
-        profiles.forEach(p => {
-          if (p.turma && p.turma.trim()) {
-            turmasSet.add(p.turma.trim());
-          }
-        });
-      }
-    } catch (err) {
-      // Mantém conjunto padrão
-    }
-  }
-
-  const sortedTurmas = Array.from(turmasSet).sort();
   turmaSelect.innerHTML = `
     <option value="todas">Todas as Minhas Turmas</option>
-    ${sortedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
+    ${teacherAssignedTurmas.map(t => `<option value="${escapeHtml(t)}">Turma ${escapeHtml(t)}</option>`).join('')}
   `;
 }
 
@@ -118,17 +131,10 @@ async function loadTurmaMural(selectedTurma) {
   if (!muralContainer) return;
 
   try {
-    let query = sb
+    const { data: rawPosts, error } = await sb
       .from('mural_posts')
-      .select('id, author_name, content, turma, created_at')
-      .order('created_at', { ascending: false })
-      .limit(4);
-
-    if (selectedTurma && selectedTurma !== 'todas') {
-      query = query.or(`turma.eq.${selectedTurma},turma.is.null`);
-    }
-
-    const { data: posts, error } = await query;
+      .select('id, author_id, author_name, author_role, content, curso, classe, turma, created_at')
+      .order('created_at', { ascending: false });
 
     if (error) {
       muralContainer.innerHTML = `
@@ -138,6 +144,10 @@ async function loadTurmaMural(selectedTurma) {
       `;
       return;
     }
+
+    const posts = (rawPosts || [])
+      .filter(p => matchesTeacherScope(p, currentTeacherProfile, selectedTurma))
+      .slice(0, 4);
 
     if (!posts || posts.length === 0) {
       muralContainer.innerHTML = `
@@ -156,7 +166,7 @@ async function loadTurmaMural(selectedTurma) {
     muralContainer.innerHTML = posts.map(post => `
       <div class="mural-post-item">
         <div class="mural-post-meta">
-          <span class="mural-author">${escapeHtml(post.author_name || 'Docente')} ${post.turma ? `• Turma ${escapeHtml(post.turma)}` : '• Geral'}</span>
+          <span class="mural-author">${escapeHtml(post.author_name || 'Docente')} ${post.turma ? `• Turma ${escapeHtml(cleanTurma(post.turma))}` : '• Geral'}</span>
           <span class="mural-time">${formatTimeRelative(post.created_at)}</span>
         </div>
         <p class="mural-content-text">${escapeHtml(post.content || '')}</p>
@@ -179,17 +189,10 @@ async function loadTurmaFiles(selectedTurma) {
   if (!filesContainer) return;
 
   try {
-    let query = sb
+    const { data: rawFiles, error } = await sb
       .from('files')
-      .select('id, name, file_url, size, curso, turma, created_at')
-      .order('created_at', { ascending: false })
-      .limit(4);
-
-    if (selectedTurma && selectedTurma !== 'todas') {
-      query = query.or(`turma.eq.${selectedTurma},turma.is.null`);
-    }
-
-    const { data: files, error } = await query;
+      .select('id, name, file_url, size, curso, classe, turma, uploader_id, created_at')
+      .order('created_at', { ascending: false });
 
     if (error) {
       filesContainer.innerHTML = `
@@ -199,6 +202,10 @@ async function loadTurmaFiles(selectedTurma) {
       `;
       return;
     }
+
+    const files = (rawFiles || [])
+      .filter(f => matchesTeacherScope(f, currentTeacherProfile, selectedTurma))
+      .slice(0, 4);
 
     if (!files || files.length === 0) {
       filesContainer.innerHTML = `
@@ -223,20 +230,27 @@ async function loadTurmaFiles(selectedTurma) {
           </div>
           <div class="file-text-meta">
             <span class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name || 'Documento Pedagógico')}</span>
-            <span class="file-details">${file.turma ? `Turma ${escapeHtml(file.turma)}` : 'Geral'} • ${file.size ? formatFileSize(file.size) : 'Ficheiro'} • ${fDate(file.created_at)}</span>
+            <span class="file-details">${file.turma ? `Turma ${escapeHtml(cleanTurma(file.turma))}` : 'Geral'} • ${file.size ? formatFileSize(file.size) : 'Ficheiro'} • ${fDate(file.created_at)}</span>
           </div>
         </div>
         ${file.file_url ? `
-          <a href="${encodeURI(file.file_url)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="Descarregar ficheiro" download>
+          <button type="button" class="file-download-link" data-file-url="${escapeHtml(file.file_url)}" data-file-id="${escapeHtml(file.id)}" title="Descarregar ficheiro" style="background:none;border:none;cursor:pointer;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-          </a>
+          </button>
         ` : ''}
       </div>
     `).join('');
+
+    filesContainer.querySelectorAll('.file-download-link[data-file-url]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        downloadStorageFile(btn.getAttribute('data-file-url'), btn.getAttribute('data-file-id'), currentTeacherProfile?.nome);
+      });
+    });
   } catch (err) {
     filesContainer.innerHTML = `
       <div class="state-empty">
@@ -254,17 +268,10 @@ async function loadTurmaEvents(selectedTurma) {
   if (!eventsContainer) return;
 
   try {
-    let query = sb
+    const { data: rawEvents, error } = await sb
       .from('calendar_events')
-      .select('id, title, description, event_date, turma')
-      .order('event_date', { ascending: true })
-      .limit(4);
-
-    if (selectedTurma && selectedTurma !== 'todas') {
-      query = query.or(`turma.eq.${selectedTurma},turma.is.null`);
-    }
-
-    const { data: events, error } = await query;
+      .select('id, title, description, event_date, curso, classe, turma, created_by')
+      .order('event_date', { ascending: true });
 
     if (error) {
       eventsContainer.innerHTML = `
@@ -274,6 +281,10 @@ async function loadTurmaEvents(selectedTurma) {
       `;
       return;
     }
+
+    const events = (rawEvents || [])
+      .filter(ev => matchesTeacherScope(ev, currentTeacherProfile, selectedTurma))
+      .slice(0, 4);
 
     if (!events || events.length === 0) {
       eventsContainer.innerHTML = `
@@ -305,7 +316,7 @@ async function loadTurmaEvents(selectedTurma) {
           <div class="event-info">
             <h4 class="event-title">${escapeHtml(event.title || 'Atividade Académica')}</h4>
             <span class="event-meta-time">
-              ${event.turma ? `Turma: ${escapeHtml(event.turma)}` : 'Geral IPPLN'}
+              ${event.turma ? `Turma: ${escapeHtml(cleanTurma(event.turma))}` : 'Geral IPPLN'}
             </span>
             ${event.description ? `<p class="event-desc">${escapeHtml(event.description)}</p>` : ''}
           </div>
@@ -354,6 +365,7 @@ async function initTeacherDashboard() {
 
   const profile = await requireAuth(['professor']);
   if (!profile) return;
+  currentTeacherProfile = profile;
 
   const displayName = profile.nome || profile.full_name || 'Professor IPPLN';
   const displayInitials = initials(displayName);
