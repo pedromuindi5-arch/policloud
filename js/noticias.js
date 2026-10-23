@@ -621,31 +621,70 @@ function setupNewsCategoryFilters() {
 }
 
 /**
+ * Normaliza campos do registo de notícia para garantir consistência
+ */
+function normalizeNewsItem(item) {
+  if (!item) return item;
+  const validCategories = ['direccao', 'pedagogico', 'oficinas', 'eventos'];
+  let cat = item.category || item.categoria;
+  if (!cat && item.body && validCategories.includes(item.body.toLowerCase().trim())) {
+    cat = item.body.toLowerCase().trim();
+  }
+  item.category = cat || 'direccao';
+
+  item.cover_image_url = item.cover_image_url || item.cover_url || item.image_url || item.foto_capa || null;
+  item.pinned = item.pinned === true || item.is_pinned === true || item.fixado === true;
+  item.content = item.content || (item.body && !validCategories.includes(item.body.toLowerCase().trim()) ? item.body : '') || '';
+
+  if (!item.author_name) {
+    if (item.profiles && typeof item.profiles === 'object') {
+      item.author_name = item.profiles.nome || item.profiles.full_name || 'Direcção';
+    } else {
+      item.author_name = item.autor || item.author || 'Direcção';
+    }
+  }
+
+  return item;
+}
+
+/**
  * Carrega a lista de notícias do Supabase
  */
 async function loadNews() {
   try {
     const { data: news, error } = await sb
       .from('news')
-      .select('*')
+      .select('*, profiles:author_id(id, nome, full_name, role)')
       .order('created_at', { ascending: false });
 
     if (error) {
-      localNewsStore = [...DEFAULT_DEMO_NEWS];
+      console.warn('Tentativa com join de profiles falhou, tentando select simples:', error.message);
+      const { data: simpleNews, error: simpleErr } = await sb
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (simpleErr || !simpleNews || simpleNews.length === 0) {
+        localNewsStore = DEFAULT_DEMO_NEWS.map(n => normalizeNewsItem(n));
+        renderNews(localNewsStore);
+        return;
+      }
+      localNewsStore = simpleNews.map(n => normalizeNewsItem(n));
       renderNews(localNewsStore);
       return;
     }
 
     if (!news || news.length === 0) {
-      localNewsStore = [...DEFAULT_DEMO_NEWS];
+      localNewsStore = DEFAULT_DEMO_NEWS.map(n => normalizeNewsItem(n));
       renderNews(localNewsStore);
       return;
     }
 
-    localNewsStore = news;
+    localNewsStore = news.map(item => normalizeNewsItem(item));
     renderNews(localNewsStore);
   } catch (err) {
-    localNewsStore = [...DEFAULT_DEMO_NEWS];
+    console.error('Erro ao carregar notícias:', err);
+    localNewsStore = DEFAULT_DEMO_NEWS.map(n => normalizeNewsItem(n));
     renderNews(localNewsStore);
   }
 }
@@ -788,13 +827,18 @@ async function deleteNews(newsId) {
   }
 
   try {
-    const { error } = await sb.from('news').delete().eq('id', newsId);
-    if (error) {
-      throw new Error(error.message || 'Erro ao eliminar notícia.');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(newsId));
+    if (isUuid) {
+      const { error } = await sb.from('news').delete().eq('id', newsId);
+      if (error) {
+        throw new Error(error.message || 'Erro ao eliminar notícia.');
+      }
     }
 
     localNewsStore = localNewsStore.filter(n => String(n.id) !== String(newsId));
-    await log('eliminar_noticia', 'news', newsId, currentProfile?.nome || '');
+    if (isUuid) {
+      await log('eliminar_noticia', 'news', newsId, currentProfile?.nome || '');
+    }
     toast('Notícia eliminada com sucesso!', 'success');
     renderNews(localNewsStore);
   } catch (err) {
@@ -863,6 +907,8 @@ async function handleCreateNewsSubmit(e) {
     const newsCategorySelect = document.getElementById('news-category-select');
     const category = newsCategorySelect ? newsCategorySelect.value : 'direccao';
 
+    const isUuidEditing = editingId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(editingId));
+
     if (editingId) {
       // ATUALIZAÇÃO
       setUploadProgress(70, 'A atualizar comunicado na base de dados oficial...');
@@ -871,61 +917,103 @@ async function handleCreateNewsSubmit(e) {
         title: title,
         subtitle: subtitle || null,
         content: content,
-        category: category,
+        body: category,
         pinned: isPinned,
+        is_pinned: isPinned,
+        updated_at: new Date().toISOString()
       };
       if (coverUrl) {
         updatePayload.cover_image_url = coverUrl;
+        updatePayload.cover_url = coverUrl;
       }
 
-      const { data, error } = await sb
-        .from('news')
-        .update(updatePayload)
-        .eq('id', editingId)
-        .select()
-        .single();
+      if (isUuidEditing) {
+        let updateRes = await sb
+          .from('news')
+          .update(updatePayload)
+          .eq('id', editingId)
+          .select('*, profiles:author_id(id, nome, full_name, role)')
+          .single();
 
-      if (error) {
-        throw new Error('Não foi possível atualizar a notícia: ' + (error.message || 'Erro na base de dados'));
+        if (updateRes.error) {
+          updateRes = await sb
+            .from('news')
+            .update(updatePayload)
+            .eq('id', editingId)
+            .select('*')
+            .single();
+
+          if (updateRes.error) {
+            throw new Error('Não foi possível atualizar a notícia: ' + (updateRes.error.message || 'Erro na base de dados'));
+          }
+        }
       }
 
       const idx = localNewsStore.findIndex(n => String(n.id) === String(editingId));
       if (idx !== -1) {
-        localNewsStore[idx] = { ...localNewsStore[idx], ...updatePayload };
+        localNewsStore[idx] = normalizeNewsItem({
+          ...localNewsStore[idx],
+          ...updatePayload,
+          category: category,
+          content: content,
+          cover_image_url: coverUrl || localNewsStore[idx].cover_image_url
+        });
       }
 
-      await log('editar_noticia', 'news', editingId, currentProfile?.nome || '');
+      if (isUuidEditing) {
+        await log('editar_noticia', 'news', editingId, currentProfile?.nome || '');
+      }
       toast('Notícia atualizada com sucesso!', 'success');
       setUploadProgress(100, 'Notícia atualizada com sucesso!');
     } else {
       // INSERÇÃO NOVA
       setUploadProgress(85, 'A registar comunicado na base de dados oficial...');
 
+      const isAuthorUuid = currentProfile && currentProfile.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(currentProfile.id));
+
       const newRecord = {
         title: title,
         subtitle: subtitle || null,
         content: content,
-        category: category,
+        body: category,
         cover_image_url: coverUrl || null,
+        cover_url: coverUrl || null,
         pinned: isPinned,
-        author_id: currentProfile.id || null,
-        author_name: currentProfile.nome || 'Autor',
+        is_pinned: isPinned,
+        author_id: isAuthorUuid ? currentProfile.id : null,
         created_at: new Date().toISOString()
       };
 
-      const { data, error } = await sb
+      let insertedData = null;
+      let insertRes = await sb
         .from('news')
         .insert([newRecord])
-        .select()
+        .select('*, profiles:author_id(id, nome, full_name, role)')
         .single();
 
-      if (error) {
-        throw new Error('Não foi possível guardar a notícia na base de dados: ' + (error.message || 'Verifique as permissões'));
+      if (insertRes.error) {
+        console.warn('Insert com profiles falhou, tentando insert simples:', insertRes.error.message);
+        insertRes = await sb
+          .from('news')
+          .insert([newRecord])
+          .select('*')
+          .single();
+
+        if (insertRes.error) {
+          throw new Error('Não foi possível guardar a notícia na base de dados: ' + (insertRes.error.message || 'Verifique as permissões'));
+        }
       }
 
-      if (data) {
-        localNewsStore.unshift(data);
-        await log('publicar_noticia', 'news', data.id, currentProfile?.nome || '');
+      insertedData = insertRes.data;
+
+      if (insertedData) {
+        const normalized = normalizeNewsItem({
+          ...insertedData,
+          category: category,
+          author_name: currentProfile?.nome || currentProfile?.full_name || 'Direcção'
+        });
+        localNewsStore.unshift(normalized);
+        await log('publicar_noticia', 'news', insertedData.id, currentProfile?.nome || '');
         toast('Notícia publicada com sucesso!', 'success');
       }
 

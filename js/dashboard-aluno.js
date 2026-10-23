@@ -79,7 +79,7 @@ async function loadRecentNews() {
       <article class="news-item">
         <span class="news-item-date">${fDate(item.created_at)}</span>
         <h4 class="news-item-title">${escapeHtml(item.title || 'Comunicado Escolar')}</h4>
-        <p class="news-item-desc">${escapeHtml(item.content || '')}</p>
+        <p class="news-item-desc">${escapeHtml(item.content || item.body || '')}</p>
       </article>
     `).join('');
   } catch (err) {

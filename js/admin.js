@@ -1653,14 +1653,27 @@ async function fetchRecentNews() {
   }
 
   try {
+    let newsData = [];
     const { data, error } = await sb
       .from('news')
-      .select('*')
+      .select('*, profiles:author_id(id, nome, full_name, role)')
       .order('created_at', { ascending: false })
       .limit(6);
 
-    if (error) throw error;
-    allNewsData = data && data.length > 0 ? data : DEFAULT_DEMO_NEWS;
+    if (error) {
+      console.warn('Admin: consulta com profiles falhou, tentando select simples:', error.message);
+      const fallback = await sb
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(6);
+      if (fallback.error) throw fallback.error;
+      newsData = fallback.data || [];
+    } else {
+      newsData = data || [];
+    }
+
+    allNewsData = newsData && newsData.length > 0 ? newsData : DEFAULT_DEMO_NEWS;
   } catch (err) {
     console.error('Erro ao consultar notícias:', err);
     allNewsData = DEFAULT_DEMO_NEWS;
@@ -1684,7 +1697,9 @@ function renderNewsTable() {
   }
 
   newsTableBody.innerHTML = allNewsData.map(item => {
-    const catConfig = getNewsCategoryConfig(item.category || item.categoria);
+    const rawCat = item.category || item.categoria || item.body;
+    const catConfig = getNewsCategoryConfig(rawCat);
+    const authorName = item.author_name || (item.profiles && (item.profiles.nome || item.profiles.full_name)) || item.autor || item.author || 'Direcção';
 
     return `
       <tr>
@@ -1698,7 +1713,7 @@ function renderNewsTable() {
           </span>
         </td>
         <td>
-          <span style="font-size: 12.5px; color: var(--color-text-secondary);">${escapeHtml(item.autor || item.author || 'Direcção')}</span>
+          <span style="font-size: 12.5px; color: var(--color-text-secondary);">${escapeHtml(authorName)}</span>
         </td>
         <td>
           <span style="font-size: 12.5px; color: var(--color-text-secondary);">${formatDate(item.created_at)}</span>
